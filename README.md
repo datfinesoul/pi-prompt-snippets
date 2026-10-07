@@ -4,6 +4,8 @@
 
 A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi adds them before or after your next message. Unlike skills, each snippet is a short standalone instruction chosen for one message at a time.
 
+Based on the original [Prompt Snippets extension](https://github.com/amosblomqvist/pi-config/tree/main/extensions/prompt-snippets) created by [Amos Blomqvist](https://github.com/amosblomqvist). This package expands that work with standalone packaging, layered configuration, and additional safeguards.
+
 ## Installation
 
 ### Global installation
@@ -14,12 +16,6 @@ Install from GitHub for use in every project. Pi records the package in `~/.pi/a
 pi install git:github.com/datfinesoul/pi-prompt-snippets
 ```
 
-Alternatively, install a local checkout:
-
-```sh
-pi install /path/to/pi-prompt-snippets
-```
-
 ### Project installation
 
 From the target project directory, add `--local` (or `-l`) to record the package in `.pi/settings.json` for that project only:
@@ -28,21 +24,35 @@ From the target project directory, add `--local` (or `-l`) to record the package
 pi install --local git:github.com/datfinesoul/pi-prompt-snippets
 ```
 
-A local checkout can also be installed at project scope:
+Project packages load only after Pi grants project trust. Run `/reload` in an existing Pi session or start a new session after either type of installation.
+
+Where the extension is installed and where snippets come from are independent. A global installation still reads a trusted project's snippets, and a project installation still reads your global snippets. See [Snippet layers](#snippet-layers).
+
+> [!NOTE]
+> Pi identifies a package by where it was installed from. Installing pi-prompt-snippets globally and for a project from the same source is fine: the project installation replaces the global one. Installing it from different locations, such as GitHub globally and a local checkout for a project, loads both copies, and Pi does not reconcile them.
+
+<details>
+<summary>Install from a local checkout</summary>
+
+Install a local checkout globally:
+
+```sh
+pi install /path/to/pi-prompt-snippets
+```
+
+Or for the current project only:
 
 ```sh
 pi install --local /path/to/pi-prompt-snippets
 ```
 
-Project packages load only after Pi grants project trust. Run `/reload` in an existing Pi session or start a new session after either type of installation.
-
-Where the extension is installed and where snippets come from are independent. A global installation still reads a trusted project's snippets, and a project installation still reads your global snippets. See [Snippet layers](#snippet-layers).
-
-To try the extension without adding it to Pi's settings:
+To try the extension from a checkout without adding it to Pi's settings:
 
 ```sh
 pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 ```
+
+</details>
 
 > [!NOTE]
 > If this package replaces a manually installed `.pi/extensions/prompt-snippets` or `~/.pi/agent/extensions/prompt-snippets` directory, remove the old copy so Pi does not load both. Move any custom snippets from the old copy's `snippets/` directory into a [snippet layer](#snippet-layers).
