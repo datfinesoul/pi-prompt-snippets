@@ -52,10 +52,10 @@ To try the extension from a checkout without adding it to Pi's settings:
 pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 ```
 
-</details>
-
 > [!NOTE]
 > If this package replaces a manually installed `.pi/extensions/prompt-snippets` or `~/.pi/agent/extensions/prompt-snippets` directory, remove the old copy so Pi does not load both. Move any custom snippets from the old copy's `snippets/` directory into a [snippet layer](#snippet-layers).
+
+</details>
 
 ## Usage
 
