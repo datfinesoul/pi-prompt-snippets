@@ -1,0 +1,45 @@
+{
+  "name": "@datfinesoul/pi-prompt-snippets",
+  "version": "0.1.0",
+  "description": "A Pi extension for toggling reusable prompt snippets that are prepended or appended to the next message.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Philip Hadviger <613305+datfinesoul@users.noreply.github.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datfinesoul/pi-prompt-snippets.git"
+  },
+  "homepage": "https://github.com/datfinesoul/pi-prompt-snippets#readme",
+  "bugs": {
+    "url": "https://github.com/datfinesoul/pi-prompt-snippets/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "prompt-snippets"
+  ],
+  "files": [
+    "extensions/",
+    "src/",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "npm test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/prompt-snippets/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
