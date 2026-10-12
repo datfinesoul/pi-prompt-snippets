@@ -152,12 +152,14 @@ The extension transforms only `interactive` input while at least one snippet is 
 
 ## Development
 
-The package requires no runtime dependencies beyond the Pi host. Run the test suite and inspect the publishable package with:
+The package requires no runtime dependencies beyond the Pi host. The scripts work with npm or pnpm. Run the test suite and inspect the publishable package with:
 
 ```sh
 npm test
 npm run pack:check
 ```
+
+Use `pnpm test` and `pnpm run pack:check` when you use pnpm.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
