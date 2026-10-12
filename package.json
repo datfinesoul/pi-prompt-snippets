@@ -27,8 +27,8 @@
   ],
   "scripts": {
     "test": "node --test",
-    "check": "npm test",
-    "pack:check": "npm pack --dry-run"
+    "check": "node --test",
+    "pack:check": "node scripts/pack-check.mjs"
   },
   "pi": {
     "extensions": [

@@ -4,8 +4,8 @@ Describe the problem and solution.
 
 ## Testing
 
-- [ ] `npm test`
-- [ ] `npm run pack:check`
+- [ ] Tests pass (`npm test` or `pnpm test`)
+- [ ] Package contents validate (`npm run pack:check` or `pnpm run pack:check`)
 - [ ] Manually tested in Pi when behavior changed
 
 ## Checklist

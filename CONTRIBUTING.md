@@ -21,7 +21,7 @@ Clone the repository and run the tests:
 ```sh
 git clone https://github.com/datfinesoul/pi-prompt-snippets.git
 cd pi-prompt-snippets
-npm test
+npm test   # or: pnpm test
 ```
 
 No dependency installation or build step is required. To load the working tree without enabling other extensions, run:
@@ -36,7 +36,7 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 2. Add or update tests for behavior changes.
 3. Keep the extension dependency-free unless a dependency provides clear value that cannot reasonably be implemented with the Node.js standard library.
 4. Update the README and changelog when user-visible behavior changes.
-5. Run `npm test` and `npm run pack:check`.
+5. Run `npm test` and `npm run pack:check`, or the `pnpm` equivalents.
 
 ## Pull requests
 
