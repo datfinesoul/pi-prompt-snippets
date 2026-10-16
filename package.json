@@ -1,6 +1,6 @@
 {
   "name": "@datfinesoul/pi-prompt-snippets",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Pi extension for toggling reusable prompt snippets that are prepended or appended to the next message.",
   "type": "module",
   "license": "MIT",
