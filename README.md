@@ -59,8 +59,9 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 ## Usage
 
 - Press <kbd>Ctrl</kbd>+<kbd>\\</kbd> or run `/snippets` to open the toggle menu.
-- Use <kbd>Up</kbd>/<kbd>Down</kbd> to navigate, <kbd>Space</kbd> to toggle, <kbd>Enter</kbd> to apply, and <kbd>Esc</kbd> to cancel.
-- Press <kbd>Tab</kbd> to preview the selected snippet, including the layer and file it came from. Use <kbd>Up</kbd>/<kbd>Down</kbd> to scroll and <kbd>Tab</kbd> or <kbd>Esc</kbd> to return to the list.
+- Use <kbd>Up</kbd>/<kbd>Down</kbd> to navigate and <kbd>Space</kbd> or <kbd>1</kbd>–<kbd>9</kbd> to toggle snippets (`●` selected, `○` unselected). Number keys toggle the corresponding item without moving the cursor; items after nine use a dot instead of a number.
+- Press <kbd>Enter</kbd> to apply the checked snippets, or the highlighted snippet if none are checked. This selects snippets for your next message; it does not copy to the clipboard. Press <kbd>Esc</kbd> to cancel without changing your active snippets.
+- Press <kbd>Right</kbd> or <kbd>Tab</kbd> to preview the highlighted snippet, including the layer and file it came from. Use <kbd>Up</kbd>/<kbd>Down</kbd> to scroll, <kbd>Left</kbd>, <kbd>Tab</kbd>, or <kbd>Esc</kbd> to return to the list, and <kbd>Enter</kbd> to apply.
 - Active snippets appear in a widget above the editor. Snippets from the global or project layer are tagged in the menu.
 - On send, the enabled prepend snippets, your message, and the enabled append snippets are combined in that order, separated by blank lines.
 - Selections reset after each sent message and at session start.
