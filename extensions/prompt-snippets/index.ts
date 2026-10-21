@@ -127,10 +127,11 @@ export default function promptSnippets(pi: ExtensionAPI) {
 
       const itemRow = (snippet: Snippet, idx: number, width: number): string => {
         const pointer = idx === cursor ? theme.fg("accent", "> ") : "  ";
-        const checkbox = working.has(snippet.id) ? theme.fg("success", "[x]") : theme.fg("dim", "[ ]");
+        const checkbox = working.has(snippet.id) ? theme.fg("success", "●") : theme.fg("dim", "○");
+        const number = idx < 9 ? String(idx + 1) : "·";
         const source = snippet.source === "bundled" ? "" : theme.fg("muted", ` [${snippet.source}]`);
         const desc = snippet.description ? theme.fg("dim", ` - ${safeDisplay(snippet.description)}`) : "";
-        return truncateToWidth(`${pointer}${checkbox} ${theme.bold(safeDisplay(snippet.name))}${source}${desc}`, width);
+        return truncateToWidth(`${pointer}${checkbox} ${number} ${theme.bold(safeDisplay(snippet.name))}${source}${desc}`, width);
       };
 
       /** List rows with the item index each row corresponds to (null for headers/blanks). */
@@ -203,10 +204,16 @@ export default function promptSnippets(pi: ExtensionAPI) {
         };
       };
 
+      const confirm = () => {
+        // Like CBC, Enter uses the highlighted item when none are checked.
+        if (working.size === 0) working.add(items[cursor].id);
+        done(true);
+      };
+
       return {
         render(width: number): string[] {
           // Reserve lines for: top border, title, blank, blank, hints, bottom border.
-          const maxView = Math.max(5, tui.terminal.rows - 10);
+          const maxView = Math.max(1, tui.terminal.rows - 7);
 
           let content: string[];
           let title: string;
@@ -218,21 +225,21 @@ export default function promptSnippets(pi: ExtensionAPI) {
             content = v.out;
             listScroll = v.scroll;
             title = "Prompt snippets";
-            hints = "↑↓ navigate • Space toggle • Tab preview • Enter apply • Esc cancel";
+            hints = "↑↓ move • →/Tab preview • 1-9/Space toggle • Enter apply • Esc cancel";
           } else {
             const snippet = items[cursor];
             const v = viewport(buildPreviewRows(snippet, width), previewScroll, maxView);
             content = v.out;
             previewScroll = v.scroll;
             title = `Preview: ${safeDisplay(snippet.name)}`;
-            hints = "↑↓ scroll • Tab/Esc back";
+            hints = "↑↓ scroll • ←/Tab/Esc back • Enter apply";
           }
 
           return [
             theme.fg("accent", "─".repeat(width)),
             truncateToWidth(` ${theme.fg("accent", theme.bold(title))}`, width),
             "",
-            ...content,
+            ...content.map((line) => truncateToWidth(line, width)),
             "",
             truncateToWidth(theme.fg("dim", ` ${hints}`), width),
             theme.fg("accent", "─".repeat(width)),
@@ -242,24 +249,28 @@ export default function promptSnippets(pi: ExtensionAPI) {
         handleInput(data: string) {
           if (mode === "list") {
             if (matchesKey(data, Key.up)) {
-              cursor = (cursor - 1 + items.length) % items.length;
+              cursor = Math.max(0, cursor - 1);
             } else if (matchesKey(data, Key.down)) {
-              cursor = (cursor + 1) % items.length;
+              cursor = Math.min(items.length - 1, cursor + 1);
             } else if (matchesKey(data, Key.space)) {
               const id = items[cursor].id;
               if (working.has(id)) working.delete(id);
               else working.add(id);
-            } else if (matchesKey(data, Key.tab)) {
+            } else if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
               mode = "preview";
               previewScroll = 0;
             } else if (matchesKey(data, Key.enter)) {
-              done(true);
+              confirm();
               return;
             } else if (matchesKey(data, Key.escape)) {
               done(false);
               return;
             } else {
-              return;
+              const number = ["1", "2", "3", "4", "5", "6", "7", "8", "9"].find((key) => matchesKey(data, key));
+              const snippet = number ? items[Number(number) - 1] : undefined;
+              if (!snippet) return;
+              if (working.has(snippet.id)) working.delete(snippet.id);
+              else working.add(snippet.id);
             }
             tui.requestRender();
           } else {
@@ -267,8 +278,11 @@ export default function promptSnippets(pi: ExtensionAPI) {
               previewScroll--;
             } else if (matchesKey(data, Key.down)) {
               previewScroll++;
-            } else if (matchesKey(data, Key.tab) || matchesKey(data, Key.escape)) {
+            } else if (matchesKey(data, Key.tab) || matchesKey(data, Key.escape) || matchesKey(data, Key.left)) {
               mode = "list";
+            } else if (matchesKey(data, Key.enter)) {
+              confirm();
+              return;
             } else {
               return;
             }

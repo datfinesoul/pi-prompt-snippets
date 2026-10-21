@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
+### Changed
+
+- Align the snippet picker with Code Block Copy: use circular selection markers, number-key toggles for the first nine items, and non-wrapping navigation.
+- Enter applies the highlighted snippet when none are checked and also works from preview.
+- Left/Right open and close preview alongside the existing Tab controls, and the picker fits smaller terminals.
+
 ## [0.1.1] - 2026-10-16
 
 ### Changed
@@ -25,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Protection against applying snippets twice when the extension is loaded more than once.
 - Automated tests and open source project documentation.
 
-[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/datfinesoul/pi-prompt-snippets/releases/tag/v0.1.0
