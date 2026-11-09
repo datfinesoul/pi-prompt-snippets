@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   applySnippets,
   DEFAULT_SHORTCUT,
+  DEFAULT_SETTINGS,
   loadSnippets,
   parseSettings,
   parseSnippet,
   readLayer,
+  readSettings,
 } from "../src/snippets.js";
 
 function temporaryDirectory(files = {}) {
@@ -113,11 +115,49 @@ test("applySnippets wraps text with prepend and append bodies", () => {
 });
 
 test("parseSettings defaults, overrides, and disables the shortcut", () => {
-  assert.deepEqual(parseSettings("{}", "s.json"), { shortcut: DEFAULT_SHORTCUT });
-  assert.deepEqual(parseSettings('{"shortcut":"Ctrl+Shift+S"}', "s.json"), { shortcut: "ctrl+shift+s" });
-  assert.deepEqual(parseSettings('{"shortcut":null}', "s.json"), { shortcut: null });
-  assert.deepEqual(parseSettings('{"shortcut":false}', "s.json"), { shortcut: null });
+  assert.deepEqual(parseSettings("{}", "s.json"), DEFAULT_SETTINGS);
+  assert.deepEqual(parseSettings('{"shortcut":"Ctrl+Shift+S"}', "s.json"), { ...DEFAULT_SETTINGS, shortcut: "ctrl+shift+s" });
+  assert.deepEqual(parseSettings('{"shortcut":null}', "s.json"), { ...DEFAULT_SETTINGS, shortcut: null });
+  assert.deepEqual(parseSettings('{"shortcut":false}', "s.json"), { ...DEFAULT_SETTINGS, shortcut: null });
   assert.throws(() => parseSettings('{"shortcut":1}', "s.json"), /"shortcut" must be a key string/);
   assert.throws(() => parseSettings("[]", "s.json"), /settings must be an object/);
   assert.throws(() => parseSettings("{", "s.json"), /invalid JSON/);
+});
+
+test("skill visibility accepts booleans and trusted project values override global settings", () => {
+  const global = parseSettings('{"shortcut":"ctrl+s","showOnDemandSkills":false}', "global.json");
+  assert.deepEqual(global, { shortcut: "ctrl+s", showOnDemandSkills: false });
+  assert.deepEqual(parseSettings("{}", "project.json", { defaults: global, project: true }), global);
+  assert.deepEqual(parseSettings('{"shortcut":false,"showOnDemandSkills":true}', "project.json", {
+    defaults: global, project: true,
+  }), { shortcut: "ctrl+s", showOnDemandSkills: true });
+  assert.deepEqual(parseSettings('{"shortcut":123,"showOnDemandSkills":false}', "project.json", {
+    defaults: DEFAULT_SETTINGS, project: true,
+  }), { shortcut: DEFAULT_SHORTCUT, showOnDemandSkills: false });
+  for (const value of ['"false"', "null", "0", "[]", "{}"] ) {
+    assert.throws(() => parseSettings(`{"showOnDemandSkills":${value}}`, "s.json"), /"showOnDemandSkills" must be a boolean/);
+  }
+});
+
+test("missing settings inherit defaults and invalid layers warn without crashing", (t) => {
+  const directory = temporaryDirectory();
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, "settings.json");
+  const warnings = [];
+  const defaults = { shortcut: "ctrl+s", showOnDemandSkills: false };
+  const options = { defaults, project: true, onWarning: message => warnings.push(message) };
+  assert.deepEqual(readSettings(path), DEFAULT_SETTINGS);
+  assert.deepEqual(readSettings(path, options), defaults);
+  assert.deepEqual(warnings, []);
+  for (const invalid of ["{", "[]", '{"showOnDemandSkills":"true"}']) {
+    writeFileSync(path, invalid);
+    assert.deepEqual(readSettings(path, options), defaults);
+    assert.ok(warnings.at(-1).includes(path));
+  }
+  assert.equal(warnings.length, 3);
+  assert.deepEqual(readSettings(directory, options), defaults); // Unreadable as a file.
+  assert.equal(warnings.length, 4);
+  writeFileSync(path, '{"showOnDemandSkills":true}');
+  assert.deepEqual(readSettings(path, options), { ...defaults, showOnDemandSkills: true });
+  assert.deepEqual(defaults, { shortcut: "ctrl+s", showOnDemandSkills: false });
 });

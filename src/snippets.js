@@ -24,10 +24,11 @@ import { join } from "node:path";
  *   path: string,
  * }} Snippet
  * @typedef {{ source: SnippetSource, directory: string }} SnippetLayer
- * @typedef {{ shortcut: string | null }} Settings
+ * @typedef {{ shortcut: string | null, showOnDemandSkills: boolean }} Settings
  */
 
 export const DEFAULT_SHORTCUT = "ctrl+\\";
+export const DEFAULT_SETTINGS = Object.freeze({ shortcut: DEFAULT_SHORTCUT, showOnDemandSkills: true });
 export const DEFAULT_ORDER = 9999;
 export const MAX_SNIPPET_BYTES = 256 * 1024;
 export const MAX_SNIPPETS = 256;
@@ -179,9 +180,10 @@ export function applySnippets(text, active) {
  *
  * @param {string} contents
  * @param {string} source
+ * @param {{ defaults?: Settings, project?: boolean }} [options]
  * @returns {Settings}
  */
-export function parseSettings(contents, source) {
+export function parseSettings(contents, source, { defaults = DEFAULT_SETTINGS, project = false } = {}) {
   let config;
   try {
     config = JSON.parse(contents);
@@ -193,21 +195,40 @@ export function parseSettings(contents, source) {
     throw new Error(`${source}: settings must be an object`);
   }
 
-  if (config.shortcut === undefined) return { shortcut: DEFAULT_SHORTCUT };
-  if (config.shortcut === null || config.shortcut === false || config.shortcut === "") return { shortcut: null };
-  if (typeof config.shortcut !== "string") {
-    throw new Error(`${source}: "shortcut" must be a key string, or null/false to disable the shortcut`);
+  const settings = { ...defaults };
+  // Shortcuts register before project trust is available, so ignore project values.
+  if (!project && config.shortcut !== undefined) {
+    if (config.shortcut === null || config.shortcut === false || config.shortcut === "") {
+      settings.shortcut = null;
+    } else if (typeof config.shortcut === "string") {
+      settings.shortcut = config.shortcut.trim().toLowerCase();
+    } else {
+      throw new Error(`${source}: "shortcut" must be a key string, or null/false to disable the shortcut`);
+    }
   }
-  return { shortcut: config.shortcut.trim().toLowerCase() };
+  if (config.showOnDemandSkills !== undefined) {
+    if (typeof config.showOnDemandSkills !== "boolean") {
+      throw new Error(`${source}: "showOnDemandSkills" must be a boolean`);
+    }
+    settings.showOnDemandSkills = config.showOnDemandSkills;
+  }
+  return settings;
 }
 
 /**
- * Read settings from a file, falling back to defaults when it does not exist.
+ * Read one settings layer. Invalid layers warn and preserve inherited settings.
  *
  * @param {string} settingsPath
+ * @param {{ defaults?: Settings, project?: boolean, onWarning?: (message: string) => void }} [options]
  * @returns {Settings}
  */
-export function readSettings(settingsPath) {
-  if (!existsSync(settingsPath)) return { shortcut: DEFAULT_SHORTCUT };
-  return parseSettings(readFileSync(settingsPath, "utf8"), settingsPath);
+export function readSettings(settingsPath, { defaults = DEFAULT_SETTINGS, project = false, onWarning = console.warn } = {}) {
+  try {
+    return parseSettings(readFileSync(settingsPath, "utf8"), settingsPath, { defaults, project });
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      onWarning(`Prompt snippets settings: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { ...defaults };
+  }
 }
