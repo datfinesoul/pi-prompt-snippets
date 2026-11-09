@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi appends them in one guidance block after your next request. Each snippet is a short standalone instruction chosen for one message at a time. The same menu also lists on-demand skills and inserts their commands into the editor.
+A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi appends them in one instructions block after your next request. Each snippet is a short standalone instruction chosen for one message at a time. The same menu also lists on-demand skills and inserts their commands into the editor.
 
 Based on the original [Prompt Snippets extension](https://github.com/amosblomqvist/pi-config/tree/main/extensions/prompt-snippets) created by [Amos Blomqvist](https://github.com/amosblomqvist). This package expands that work with standalone packaging, layered configuration, and additional safeguards.
 
@@ -60,16 +60,17 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 
 - Press <kbd>Ctrl</kbd>+<kbd>\\</kbd> or run `/snippets` to open the toggle menu.
 - Use <kbd>Up</kbd>/<kbd>Down</kbd> to navigate and <kbd>Space</kbd> or <kbd>1</kbd>–<kbd>9</kbd> to toggle snippets (`●` selected, `○` unselected). Number keys toggle the corresponding item without moving the cursor; items after nine use a dot instead of a number.
+- Press <kbd>Up</kbd> at the first item to move to the last item, including skills when shown. Press <kbd>Down</kbd> at the last item to return to the first.
 - Press <kbd>Enter</kbd> to apply the checked snippets, or the highlighted snippet if none are checked. This selects snippets for your next message; it does not copy to the clipboard. Press <kbd>Esc</kbd> to cancel without changing your active snippets.
 - Press <kbd>Right</kbd> or <kbd>Tab</kbd> to preview the highlighted snippet, including the layer and file it came from. Use <kbd>Up</kbd>/<kbd>Down</kbd> to scroll, <kbd>Left</kbd>, <kbd>Tab</kbd>, or <kbd>Esc</kbd> to return to the list, and <kbd>Enter</kbd> to apply.
 - Active snippets appear in a widget above the editor. Snippets from the global or project layer are tagged in the menu.
-- On send, Pi puts your request first and the selected snippets in one guidance block after it. XML-style tags separate the sections.
-- Snippets appear in one list, sorted by `order`, then name, then ID. The widget shows the selected guidance.
+- On send, Pi puts your request first and the selected snippets in one instructions block after it. XML-style tags separate the sections.
+- Snippets appear in one list, sorted by `order`, then name, then ID. The widget shows the selected instructions.
 - Selections reset after each sent message and at session start. The injected text remains in conversation history while Pi retains that history.
 
 ### On-demand skills
 
-The **SKILLS — on-demand only** section follows GUIDANCE. It appears by default. Set [`showOnDemandSkills`](#menu-settings) to `false` to hide it. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
+The **SKILLS — on-demand only** section follows INSTRUCTIONS. It appears by default. Set [`showOnDemandSkills`](#menu-settings) to `false` to hide it. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
 
 ```yaml
 disable-model-invocation: true
@@ -144,7 +145,7 @@ enabled: false
 | `order` | No | Integer sort order; defaults to `9999`, with ties broken by name, then ID |
 | `enabled` | No | Set to `false` to remove the snippet from lower layers |
 
-The extension ignores legacy `placement` fields in custom snippets. These snippets still load, but all selected snippets enter the appended guidance block.
+The extension ignores legacy `placement` fields in custom snippets. These snippets still load, but all selected snippets enter the appended instructions block.
 
 Frontmatter is optional; a file without it is used entirely as the body. Invalid field values are ignored rather than hiding the snippet. A new snippet without a body is skipped.
 
@@ -214,16 +215,16 @@ The request stays unchanged inside the first section. Selected snippet bodies fo
 Your original message.
 </user_request>
 
-<request_guidance>
+<request_instructions>
 First selected snippet.
 
 Second selected snippet.
-</request_guidance>
+</request_instructions>
 ```
 
-If either section contains an opening or closing delimiter, the extension tries matching tags with numeric suffixes. For example, it tries `user_request_1` and `request_guidance_1` until neither section contains the chosen delimiters. It does not escape or change the contents.
+If either section contains an opening or closing delimiter, the extension tries matching tags with numeric suffixes. For example, it tries `user_request_1` and `request_instructions_1` until neither section contains the chosen delimiters. It does not escape or change the contents.
 
-For `/skill:name` input, the command stays first. The request section contains its arguments, and the guidance section follows. Pi then expands the skill through its normal command handler.
+For `/skill:name` input, the command stays first. The request section contains its arguments, and the instructions section follows. Pi then expands the skill through its normal command handler.
 
 The tags are plain-text labels. They do not create higher-priority instructions or enforce action restrictions. Snippets are prompt text, not a security boundary. See [SECURITY.md](SECURITY.md).
 

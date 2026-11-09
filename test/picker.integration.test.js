@@ -71,14 +71,20 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   reset();
   interact = (picker, render, tui) => {
     assert.match(render(), /> ○ 1 Ask questions/);
-    assert.match(render(), /GUIDANCE — for this request/);
+    assert.match(render(), /INSTRUCTIONS — for this request/);
     assert.doesNotMatch(render(), /PREPEND|APPEND|\[[ x]\]/);
     picker.handleInput("1");
     assert.match(render(), /> ● 1 /);
     picker.handleInput("1");
     assert.match(render(), /> ○ 1 /);
     picker.handleInput("9"); // Absent numbered item is ignored.
-    picker.handleInput("\x1b[A"); // Navigation clamps at the first item.
+    picker.handleInput("\x1b[A"); // Up wraps from the first snippet to the last.
+    assert.match(render(), /> ○ 5 Diagnose, don't fix/);
+    picker.handleInput("\x1b[B"); // Down wraps from the last snippet to the first.
+    assert.match(render(), /> ○ 1 /);
+    picker.handleInput("\x1b[B"); // Ordinary movement still advances one item.
+    assert.match(render(), /> ○ 2 Session kickoff/);
+    picker.handleInput("\x1b[A");
     assert.match(render(), /> ○ 1 /);
     picker.handleInput("\x1b[C");
     assert.match(render(), /Preview:/);
@@ -93,12 +99,12 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     picker.handleInput("\r"); // Highlight fallback.
   };
   await command.handler("", ctx);
-  assert.deepEqual(widget, ["Guidance: Ask questions"]);
+  assert.deepEqual(widget, ["Instructions: Ask questions"]);
   const fallback = await consume();
   assert.equal(widget, undefined);
   assert.equal(fallback.action, "transform");
-  assert.match(fallback.text, /^<user_request>\nhello\n<\/user_request>\n\n<request_guidance>\n/);
-  assert.match(fallback.text, /wait for my explicit confirmation\.\n<\/request_guidance>$/);
+  assert.match(fallback.text, /^<user_request>\nhello\n<\/user_request>\n\n<request_instructions>\n/);
+  assert.match(fallback.text, /Wait for my explicit confirmation before proceeding\.\n<\/request_instructions>$/);
   assert.equal((await consume()).action, "continue");
 
   reset();
@@ -139,6 +145,10 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     interact = (picker, render, tui) => {
       assert.match(render(), /SKILLS — on-demand only/);
       assert.doesNotMatch(render(), /automatic|quoted/);
+      picker.handleInput("\x1b[A"); // The last item includes on-demand skills.
+      assert.match(render(), /> ↳ · manual/);
+      picker.handleInput("\x1b[B"); // Down wraps from the last skill to the first snippet.
+      assert.match(render(), /> ○ 1 Ask questions/);
       picker.handleInput("1");
       moveToSkill(picker, render);
       picker.handleInput(" "); // Skills never become checked snippets.
@@ -223,9 +233,9 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
       picker.handleInput("\r");
     };
     await command.handler("", ctx);
-    assert.deepEqual(widget, ["Guidance: Legacy"]);
+    assert.deepEqual(widget, ["Instructions: Legacy"]);
     assert.deepEqual(await consume(), { action: "transform",
-      text: "<user_request>\nhello\n</user_request>\n\n<request_guidance>\nLegacy guidance.\n</request_guidance>" });
+      text: "<user_request>\nhello\n</user_request>\n\n<request_instructions>\nLegacy guidance.\n</request_instructions>" });
     rmSync(legacyDirectory, { recursive: true });
 
     // Visibility merges defaults, global settings, and trusted project settings.
@@ -294,7 +304,11 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     editorText = "skills only";
     interact = (picker, render) => {
       assert.match(render(), /> ↳ · manual/);
-      assert.doesNotMatch(render(), /GUIDANCE|PREPEND|APPEND/);
+      assert.doesNotMatch(render(), /INSTRUCTIONS|PREPEND|APPEND/);
+      picker.handleInput("\x1b[A"); // A one-item list stays on that item in both directions.
+      assert.match(render(), /> ↳ · manual/);
+      picker.handleInput("\x1b[B");
+      assert.match(render(), /> ↳ · manual/);
       picker.handleInput("1");
       picker.handleInput(" ");
       picker.handleInput("\r");

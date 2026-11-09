@@ -1,7 +1,7 @@
 {
   "name": "@datfinesoul/pi-prompt-snippets",
   "version": "0.4.0",
-  "description": "A Pi extension for toggling reusable prompt snippets in one guidance block after the next request.",
+  "description": "A Pi extension for toggling reusable prompt snippets in one instructions block after the next request.",
   "type": "module",
   "license": "MIT",
   "author": "Philip Hadviger <613305+datfinesoul@users.noreply.github.com>",

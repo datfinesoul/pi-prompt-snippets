@@ -10,10 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Replace prepend and append groups with one guidance list, sorted by order, name, and ID.
+- Replace prepend and append groups with one instructions list, sorted by order, name, and ID.
+- Label the menu and widget Instructions. Use `request_instructions` tags for the injected snippet block.
+- Wrap list navigation in both directions, including on-demand skills. Up moves from the first item to the last. Down returns from the last item to the first.
 - Append selected snippet bodies after the request in XML-style sections. Preserve the request text and choose alternate delimiters when either section contains matching tags.
 - Remove `placement` from bundled snippets. Ignore the field in existing custom snippets without changing their files.
 - Replace confidence thresholds in Ask questions and Verify, don't assume with checks for consequential uncertainty. Keep explicit confirmation in Ask questions.
+- Use STE100-inspired wording in these two snippets, with one instruction per sentence.
 
 ## [0.3.0] - 2026-11-09
 

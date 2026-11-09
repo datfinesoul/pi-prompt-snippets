@@ -105,38 +105,38 @@ test("new snippets without a body are skipped and defaults are applied", () => {
   );
 });
 
-test("applySnippets appends one guidance block regardless of legacy placement", () => {
+test("applySnippets appends one instructions block regardless of legacy placement", () => {
   const active = [{ placement: "prepend", body: "First" }, { placement: "append", body: "Second" }];
   assert.equal(applySnippets("Message", active),
-    "<user_request>\nMessage\n</user_request>\n\n<request_guidance>\nFirst\n\nSecond\n</request_guidance>");
+    "<user_request>\nMessage\n</user_request>\n\n<request_instructions>\nFirst\n\nSecond\n</request_instructions>");
 });
 
-test("applySnippets preserves request and guidance text, including Markdown and whitespace", () => {
+test("applySnippets preserves request and instructions text, including Markdown and whitespace", () => {
   const text = "  ## Instructions\r\n```xml\r\n<example>\n\n";
   const body = "# Rule\n- One\n- Two\n";
   assert.equal(applySnippets(text, [{ body }]),
-    `<user_request>\n${text}\n</user_request>\n\n<request_guidance>\n${body}\n</request_guidance>`);
+    `<user_request>\n${text}\n</user_request>\n\n<request_instructions>\n${body}\n</request_instructions>`);
   assert.equal(applySnippets(text, []), text);
   assert.equal(applySnippets("", []), "");
   assert.equal(applySnippets("", [{ body }]),
-    `<user_request>\n\n</user_request>\n\n<request_guidance>\n${body}\n</request_guidance>`);
+    `<user_request>\n\n</user_request>\n\n<request_instructions>\n${body}\n</request_instructions>`);
 });
 
 test("delimiter selection checks opening and closing tags in both sections", () => {
-  for (const tag of ["user_request", "request_guidance"]) {
+  for (const tag of ["user_request", "request_instructions"]) {
     for (const delimiter of [`<${tag}>`, `</${tag}>`]) {
       for (const inRequest of [true, false]) {
         const text = inRequest ? delimiter : "Request";
         const body = inRequest ? "Guidance" : delimiter;
         assert.equal(applySnippets(text, [{ body }]),
-          `<user_request_1>\n${text}\n</user_request_1>\n\n<request_guidance_1>\n${body}\n</request_guidance_1>`);
+          `<user_request_1>\n${text}\n</user_request_1>\n\n<request_instructions_1>\n${body}\n</request_instructions_1>`);
       }
     }
   }
-  const text = "<user_request>\n</request_guidance_1>\n<user_request_2>";
-  const body = "</request_guidance_3>";
+  const text = "<user_request>\n</request_instructions_1>\n<user_request_2>";
+  const body = "</request_instructions_3>";
   assert.equal(applySnippets(text, [{ body }]),
-    `<user_request_4>\n${text}\n</user_request_4>\n\n<request_guidance_4>\n${body}\n</request_guidance_4>`);
+    `<user_request_4>\n${text}\n</user_request_4>\n\n<request_instructions_4>\n${body}\n</request_instructions_4>`);
 });
 
 test("sort ties use name and then ID without legacy placement groups", (t) => {

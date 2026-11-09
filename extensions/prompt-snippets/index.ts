@@ -3,7 +3,7 @@
  *
  * Snippets are Markdown files merged from three layers, lowest precedence
  * first: bundled defaults, the global snippet directory, and the trusted
- * project's `.pi/prompt-snippets` directory. Selected snippets form one guidance
+ * project's `.pi/prompt-snippets` directory. Selected snippets form one instructions
  * block after the next interactive request, then the selection is cleared.
  */
 
@@ -89,7 +89,7 @@ export default function promptSnippets(pi: ExtensionAPI) {
 
     const theme = ctx.ui.theme;
     ctx.ui.setWidget(WIDGET_ID, [
-      theme.fg("accent", `Guidance: ${active.map((s) => safeDisplay(s.name)).join(" · ")}`),
+      theme.fg("accent", `Instructions: ${active.map((s) => safeDisplay(s.name)).join(" · ")}`),
     ]);
   }
 
@@ -148,7 +148,7 @@ export default function promptSnippets(pi: ExtensionAPI) {
       const buildListRows = (width: number): { text: string; itemIndex: number | null }[] => {
         const rows: { text: string; itemIndex: number | null }[] = [];
         if (snippetItems.length > 0) {
-          rows.push({ text: theme.fg("dim", "GUIDANCE — for this request"), itemIndex: null });
+          rows.push({ text: theme.fg("dim", "INSTRUCTIONS — for this request"), itemIndex: null });
           snippetItems.forEach((s, i) => rows.push({ text: itemRow(s, i, width), itemIndex: i }));
         }
         if (skills.length > 0) {
@@ -275,9 +275,9 @@ export default function promptSnippets(pi: ExtensionAPI) {
         handleInput(data: string) {
           if (mode === "list") {
             if (matchesKey(data, Key.up)) {
-              cursor = Math.max(0, cursor - 1);
+              cursor = cursor === 0 ? items.length - 1 : cursor - 1;
             } else if (matchesKey(data, Key.down)) {
-              cursor = Math.min(items.length - 1, cursor + 1);
+              cursor = cursor === items.length - 1 ? 0 : cursor + 1;
             } else if (matchesKey(data, Key.space)) {
               if (isSkill(items[cursor])) return;
               const id = items[cursor].id;

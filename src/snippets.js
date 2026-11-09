@@ -155,7 +155,7 @@ export function loadSnippets(layers) {
 }
 
 /**
- * Append active snippet bodies in one guidance section after the typed message.
+ * Append active snippet bodies in one instructions section after the typed message.
  * Choose tags absent from both sections without modifying their contents.
  *
  * @param {string} text
@@ -164,17 +164,17 @@ export function loadSnippets(layers) {
  */
 export function applySnippets(text, active) {
   if (active.length === 0) return text;
-  const guidance = active.map((s) => s.body).join("\n\n");
+  const instructions = active.map((s) => s.body).join("\n\n");
   let suffix = "";
   let index = 0;
-  const collides = (tag) => [text, guidance].some((content) =>
+  const collides = (tag) => [text, instructions].some((content) =>
     content.includes(`<${tag}>`) || content.includes(`</${tag}>`));
-  while (collides(`user_request${suffix}`) || collides(`request_guidance${suffix}`)) {
+  while (collides(`user_request${suffix}`) || collides(`request_instructions${suffix}`)) {
     suffix = `_${++index}`;
   }
   const requestTag = `user_request${suffix}`;
-  const guidanceTag = `request_guidance${suffix}`;
-  return `<${requestTag}>\n${text}\n</${requestTag}>\n\n<${guidanceTag}>\n${guidance}\n</${guidanceTag}>`;
+  const instructionsTag = `request_instructions${suffix}`;
+  return `<${requestTag}>\n${text}\n</${requestTag}>\n\n<${instructionsTag}>\n${instructions}\n</${instructionsTag}>`;
 }
 
 /**
