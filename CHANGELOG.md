@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
+### Added
+
+- Add an on-demand skills section to the snippet menu for loaded skills with `disable-model-invocation: true`.
+- Preview skill instructions and source paths. Insert a selected skill command into the editor without sending it.
+- Preserve the draft as skill arguments and apply snippet checkbox changes. Refuse insertion when the draft starts with a slash command.
+
+### Fixed
+
+- Keep skill commands intact when snippets modify their arguments, so Pi can expand the selected skill.
+- Leave non-interactive input unchanged without consuming selected snippets.
+
 ## [0.2.0] - 2026-10-21
 
 ### Changed
@@ -33,7 +46,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Protection against applying snippets twice when the extension is loaded more than once.
 - Automated tests and open source project documentation.
 
-[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/datfinesoul/pi-prompt-snippets/releases/tag/v0.1.0

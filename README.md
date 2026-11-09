@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi adds them before or after your next message. Unlike skills, each snippet is a short standalone instruction chosen for one message at a time.
+A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi adds them before or after your next message. Each snippet is a short standalone instruction chosen for one message at a time. The same menu also lists on-demand skills and inserts their commands into the editor.
 
 Based on the original [Prompt Snippets extension](https://github.com/amosblomqvist/pi-config/tree/main/extensions/prompt-snippets) created by [Amos Blomqvist](https://github.com/amosblomqvist). This package expands that work with standalone packaging, layered configuration, and additional safeguards.
 
@@ -65,6 +65,23 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 - Active snippets appear in a widget above the editor. Snippets from the global or project layer are tagged in the menu.
 - On send, the enabled prepend snippets, your message, and the enabled append snippets are combined in that order, separated by blank lines.
 - Selections reset after each sent message and at session start.
+
+### On-demand skills
+
+The **SKILLS — on-demand only** section follows PREPEND and APPEND. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
+
+```yaml
+disable-model-invocation: true
+```
+
+- Use <kbd>Up</kbd>/<kbd>Down</kbd> to highlight one skill. Space does not select skills, and number keys toggle snippets only.
+- Use <kbd>Right</kbd> or <kbd>Tab</kbd> to preview the skill instructions and source path. The existing preview navigation keys also apply to skills.
+- Press <kbd>Enter</kbd> from the list or preview to insert `/skill:name ` into the editor. Existing draft text becomes the skill arguments.
+- Review the command, add arguments if needed, and send it yourself. Selection does not send the command or copy skill instructions into the draft.
+- If the draft starts with a slash command, the menu shows a warning and remains open. The draft stays unchanged.
+- Skill selection also applies snippet checkbox changes. Escape cancels the menu without changing the draft or active snippets.
+
+The extension uses Pi's resolved skill list, including its trust and name-collision decisions. It does not scan additional skill directories. Run `/reload` after adding or removing skills. Skill names, descriptions, and paths follow Pi's loaded list. The menu reads the on-demand flag and preview instructions from those files when it opens. Unreadable skill files produce warnings instead of closing the menu.
 
 ## Snippet layers
 
@@ -149,7 +166,7 @@ Use `null` or `false` to disable the shortcut and use only `/snippets`. Keys use
 
 ## How it works
 
-The extension transforms only `interactive` input while at least one snippet is selected. It does not alter extension-injected messages, non-interactive prompts, or tool calls. If the extension is loaded more than once, the copies share their selection and only the most recently loaded copy transforms input, so snippets are never added twice. Snippets are prompt text, not a security boundary; see [SECURITY.md](SECURITY.md).
+The extension transforms only `interactive` input while at least one snippet is selected. It does not alter extension-injected messages, non-interactive prompts, or tool calls. For `/skill:name` input, snippets surround the arguments while the command remains first. Pi then expands the skill through its normal command handler. If the extension is loaded more than once, the copies share their selection and only the most recently loaded copy transforms input, so snippets are never added twice. Snippets are prompt text, not a security boundary; see [SECURITY.md](SECURITY.md).
 
 ## Development
 
@@ -162,7 +179,7 @@ npm run pack:check
 
 Use `pnpm test` and `pnpm run pack:check` when you use pnpm.
 
-Every pull request that triggers CI must bump `version` in `package.json` and move the `Unreleased` changelog entries under a matching `## [<version>] - <date>` heading; CI fails otherwise. Pull requests that change only Markdown skipped by CI are exempt. After the merge to `main` passes CI, the Release workflow tags that commit `v<version>`. Merges that do not change the version are not tagged.
+Each feature branch that triggers CI gets one version update relative to its base. Keep that version unchanged throughout the branch. Record subsequent user-visible changes under the same matching `## [<version>] - <date>` changelog heading. Do not increment the patch version for each edit, fix, or conversation turn. CI requires the branch version to exceed its base version. Pull requests that change only Markdown skipped by CI are exempt. After merge and successful CI, the Release workflow tags the tested commit `v<version>`. Merges that do not change the version are not tagged.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
