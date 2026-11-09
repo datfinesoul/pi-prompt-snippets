@@ -34,6 +34,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   let commandReads = 0;
   let shortcutKey;
   let editorText = "";
+  let widget;
   const notifications = [];
   extension({
     getCommands() { commandReads++; return commands; },
@@ -46,7 +47,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     mode: "tui", hasUI: true, cwd: process.cwd(), isProjectTrusted: () => false,
     ui: {
       theme: { fg: (_color, value) => value, bold: value => value },
-      setWidget() {},
+      setWidget(_id, lines) { widget = lines; },
       notify(message) { notifications.push(message); },
       getEditorText() { return editorText; },
       setEditorText(text) { editorText = text; },
@@ -69,8 +70,9 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   const consume = () => handlers.input({ text: "hello", source: "interactive" }, ctx);
   reset();
   interact = (picker, render, tui) => {
-    assert.match(render(), /> ○ 1 /);
-    assert.doesNotMatch(render(), /\[[ x]\]/);
+    assert.match(render(), /> ○ 1 Ask questions/);
+    assert.match(render(), /GUIDANCE — for this request/);
+    assert.doesNotMatch(render(), /PREPEND|APPEND|\[[ x]\]/);
     picker.handleInput("1");
     assert.match(render(), /> ● 1 /);
     picker.handleInput("1");
@@ -80,6 +82,8 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.match(render(), /> ○ 1 /);
     picker.handleInput("\x1b[C");
     assert.match(render(), /Preview:/);
+    assert.match(render(), /order 10 · bundled/);
+    assert.doesNotMatch(render(), /prepend|append/);
     picker.handleInput("\x1b[D");
     assert.match(render(), /Prompt snippets/);
     for (const height of [12, 16, 24]) {
@@ -89,9 +93,12 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     picker.handleInput("\r"); // Highlight fallback.
   };
   await command.handler("", ctx);
+  assert.deepEqual(widget, ["Guidance: Ask questions"]);
   const fallback = await consume();
+  assert.equal(widget, undefined);
   assert.equal(fallback.action, "transform");
-  assert.ok(fallback.text.includes("hello"));
+  assert.match(fallback.text, /^<user_request>\nhello\n<\/user_request>\n\n<request_guidance>\n/);
+  assert.match(fallback.text, /wait for my explicit confirmation\.\n<\/request_guidance>$/);
   assert.equal((await consume()).action, "continue");
 
   reset();
@@ -182,7 +189,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.equal(editorText, "unchanged draft");
     assert.equal((await consume()).action, "continue");
 
-    // Prepend snippets must not hide a skill command from Pi's expansion.
+    // Request delimiters must not hide a skill command from Pi's expansion.
     reset();
     interact = picker => { picker.handleInput("1"); picker.handleInput("\r"); };
     await command.handler("", ctx);
@@ -200,6 +207,26 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.ok(expanded.includes(fallback.text.replace("hello", "request")));
     assert.equal((await consume()).action, "continue");
     assert.deepEqual(notifications, []);
+
+    // Legacy project placement is ignored in the menu, widget, and injected prompt.
+    const legacyDirectory = join(directory, ".pi", "prompt-snippets");
+    mkdirSync(legacyDirectory, { recursive: true });
+    writeFileSync(join(legacyDirectory, "legacy.md"),
+      "---\nname: Legacy\nplacement: prepend\norder: -1\n---\nLegacy guidance.");
+    ctx.cwd = directory;
+    ctx.isProjectTrusted = () => true;
+    reset();
+    interact = (picker, render) => {
+      assert.match(render(), /> ○ 1 Legacy/);
+      assert.doesNotMatch(render(), /PREPEND|APPEND/);
+      picker.handleInput("1");
+      picker.handleInput("\r");
+    };
+    await command.handler("", ctx);
+    assert.deepEqual(widget, ["Guidance: Legacy"]);
+    assert.deepEqual(await consume(), { action: "transform",
+      text: "<user_request>\nhello\n</user_request>\n\n<request_guidance>\nLegacy guidance.\n</request_guidance>" });
+    rmSync(legacyDirectory, { recursive: true });
 
     // Visibility merges defaults, global settings, and trusted project settings.
     const globalSettingsPath = join(agentDir, "prompt-snippets.json");
@@ -267,7 +294,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     editorText = "skills only";
     interact = (picker, render) => {
       assert.match(render(), /> ↳ · manual/);
-      assert.doesNotMatch(render(), /PREPEND|APPEND/);
+      assert.doesNotMatch(render(), /GUIDANCE|PREPEND|APPEND/);
       picker.handleInput("1");
       picker.handleInput(" ");
       picker.handleInput("\r");

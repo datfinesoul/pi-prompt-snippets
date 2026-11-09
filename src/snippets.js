@@ -2,13 +2,11 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * @typedef {"prepend" | "append"} Placement
  * @typedef {"bundled" | "global" | "project"} SnippetSource
  * @typedef {{
  *   id: string,
  *   name?: string,
  *   description?: string,
- *   placement?: Placement,
  *   order?: number,
  *   enabled?: boolean,
  *   body?: string,
@@ -17,7 +15,6 @@ import { join } from "node:path";
  *   id: string,
  *   name: string,
  *   description: string,
- *   placement: Placement,
  *   order: number,
  *   body: string,
  *   source: SnippetSource,
@@ -60,7 +57,6 @@ export function parseSnippet(id, raw) {
   const definition = { id };
   if (meta.name) definition.name = meta.name;
   if (meta.description !== undefined) definition.description = meta.description;
-  if (meta.placement === "prepend" || meta.placement === "append") definition.placement = meta.placement;
   if (meta.order !== undefined && /^-?\d+$/.test(meta.order)) definition.order = Number.parseInt(meta.order, 10);
   if (meta.enabled === "false") definition.enabled = false;
   else if (meta.enabled === "true") definition.enabled = true;
@@ -110,7 +106,7 @@ export function readLayer(directory) {
  * when its own body is empty, and removes the snippet with `enabled: false`.
  *
  * @param {{ source: SnippetSource, definitions: (SnippetDefinition & { path: string })[] }[]} layers
- * @returns {Snippet[]} Prepend snippets first, then append snippets, each sorted by order and name.
+ * @returns {Snippet[]} Snippets sorted by order, name, and ID.
  */
 export function mergeLayers(layers) {
   /** @type {Map<string, Partial<Snippet> & { id: string }>} */
@@ -136,7 +132,6 @@ export function mergeLayers(layers) {
       id: entry.id,
       name: entry.name ?? entry.id,
       description: entry.description ?? "",
-      placement: entry.placement ?? "append",
       order: entry.order ?? DEFAULT_ORDER,
       body: entry.body,
       source: /** @type {SnippetSource} */ (entry.source),
@@ -146,10 +141,7 @@ export function mergeLayers(layers) {
 
   const byOrder = (/** @type {Snippet} */ a, /** @type {Snippet} */ b) =>
     a.order - b.order || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
-  return [
-    ...snippets.filter((s) => s.placement === "prepend").sort(byOrder),
-    ...snippets.filter((s) => s.placement === "append").sort(byOrder),
-  ];
+  return snippets.sort(byOrder);
 }
 
 /**
@@ -163,16 +155,26 @@ export function loadSnippets(layers) {
 }
 
 /**
- * Combine active snippet bodies with the typed message.
+ * Append active snippet bodies in one guidance section after the typed message.
+ * Choose tags absent from both sections without modifying their contents.
  *
  * @param {string} text
  * @param {Snippet[]} active Snippets in display order.
  * @returns {string}
  */
 export function applySnippets(text, active) {
-  const prepends = active.filter((s) => s.placement === "prepend").map((s) => s.body);
-  const appends = active.filter((s) => s.placement === "append").map((s) => s.body);
-  return [...prepends, text, ...appends].join("\n\n");
+  if (active.length === 0) return text;
+  const guidance = active.map((s) => s.body).join("\n\n");
+  let suffix = "";
+  let index = 0;
+  const collides = (tag) => [text, guidance].some((content) =>
+    content.includes(`<${tag}>`) || content.includes(`</${tag}>`));
+  while (collides(`user_request${suffix}`) || collides(`request_guidance${suffix}`)) {
+    suffix = `_${++index}`;
+  }
+  const requestTag = `user_request${suffix}`;
+  const guidanceTag = `request_guidance${suffix}`;
+  return `<${requestTag}>\n${text}\n</${requestTag}>\n\n<${guidanceTag}>\n${guidance}\n</${guidanceTag}>`;
 }
 
 /**

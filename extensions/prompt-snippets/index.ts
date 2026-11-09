@@ -3,8 +3,8 @@
  *
  * Snippets are Markdown files merged from three layers, lowest precedence
  * first: bundled defaults, the global snippet directory, and the trusted
- * project's `.pi/prompt-snippets` directory. Selected snippets are added to the
- * next interactive message and then cleared.
+ * project's `.pi/prompt-snippets` directory. Selected snippets form one guidance
+ * block after the next interactive request, then the selection is cleared.
  */
 
 import { dirname, join } from "node:path";
@@ -82,23 +82,15 @@ export default function promptSnippets(pi: ExtensionAPI) {
   function updateWidget(ctx: ExtensionContext) {
     if (!ctx.hasUI || ctx.mode !== "tui") return;
     const active = snippets.filter((s) => shared.enabled.has(s.id));
-    const prepends = active.filter((s) => s.placement === "prepend");
-    const appends = active.filter((s) => s.placement === "append");
-
     if (active.length === 0) {
       ctx.ui.setWidget(WIDGET_ID, undefined);
       return;
     }
 
     const theme = ctx.ui.theme;
-    const lines: string[] = [];
-    if (prepends.length > 0) {
-      lines.push(theme.fg("accent", `↑ prepend: ${prepends.map((s) => safeDisplay(s.name)).join(" · ")}`));
-    }
-    if (appends.length > 0) {
-      lines.push(theme.fg("warning", `↓ append: ${appends.map((s) => safeDisplay(s.name)).join(" · ")}`));
-    }
-    ctx.ui.setWidget(WIDGET_ID, lines);
+    ctx.ui.setWidget(WIDGET_ID, [
+      theme.fg("accent", `Guidance: ${active.map((s) => safeDisplay(s.name)).join(" · ")}`),
+    ]);
   }
 
   async function openMenu(ctx: ExtensionContext) {
@@ -134,9 +126,7 @@ export default function promptSnippets(pi: ExtensionAPI) {
     let editorText: string | undefined;
 
     const confirmed = await ctx.ui.custom<boolean>((tui, theme, _keybindings, done) => {
-      const prepends = snippets.filter((s) => s.placement === "prepend");
-      const appends = snippets.filter((s) => s.placement === "append");
-      const snippetItems = [...prepends, ...appends];
+      const snippetItems = snippets;
       const items: MenuItem[] = [...snippetItems, ...skills];
 
       let mode: "list" | "preview" = "list";
@@ -157,16 +147,9 @@ export default function promptSnippets(pi: ExtensionAPI) {
       /** List rows with the item index each row corresponds to (null for headers/blanks). */
       const buildListRows = (width: number): { text: string; itemIndex: number | null }[] => {
         const rows: { text: string; itemIndex: number | null }[] = [];
-        if (prepends.length > 0) {
-          rows.push({ text: theme.fg("dim", "↑ PREPEND - added before your message"), itemIndex: null });
-          prepends.forEach((s, i) => rows.push({ text: itemRow(s, i, width), itemIndex: i }));
-        }
-        if (prepends.length > 0 && appends.length > 0) rows.push({ text: "", itemIndex: null });
-        if (appends.length > 0) {
-          rows.push({ text: theme.fg("dim", "↓ APPEND - added after your message"), itemIndex: null });
-          appends.forEach((s, i) =>
-            rows.push({ text: itemRow(s, prepends.length + i, width), itemIndex: prepends.length + i }),
-          );
+        if (snippetItems.length > 0) {
+          rows.push({ text: theme.fg("dim", "GUIDANCE — for this request"), itemIndex: null });
+          snippetItems.forEach((s, i) => rows.push({ text: itemRow(s, i, width), itemIndex: i }));
         }
         if (skills.length > 0) {
           if (snippetItems.length > 0) rows.push({ text: "", itemIndex: null });
@@ -185,7 +168,7 @@ export default function promptSnippets(pi: ExtensionAPI) {
           truncateToWidth(
             theme.fg("dim", safeDisplay(isSkill(snippet)
               ? `${snippet.command} · ${snippet.source} · ${snippet.path}`
-              : `${snippet.placement} · order ${snippet.order} · ${snippet.source} · ${snippet.path}`)),
+              : `order ${snippet.order} · ${snippet.source} · ${snippet.path}`)),
             width,
           ),
         );

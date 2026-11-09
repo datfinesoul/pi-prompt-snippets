@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -25,17 +25,17 @@ const snippet = (fields, body = "") =>
 
 test("parseSnippet reads frontmatter and body", () => {
   const parsed = parseSnippet("x", snippet({ name: '"Concise"', placement: "prepend", order: 5 }, "Be brief."));
-  assert.deepEqual(parsed, { id: "x", name: "Concise", placement: "prepend", order: 5, body: "Be brief." });
+  assert.deepEqual(parsed, { id: "x", name: "Concise", order: 5, body: "Be brief." });
 });
 
 test("parseSnippet treats a file without frontmatter as a body", () => {
   assert.deepEqual(parseSnippet("plain", "Just text.\n"), { id: "plain", body: "Just text." });
 });
 
-test("parseSnippet ignores invalid placement and order values", () => {
-  const parsed = parseSnippet("x", snippet({ placement: "middle", order: "soon" }, "Body"));
-  assert.equal(parsed.placement, undefined);
-  assert.equal(parsed.order, undefined);
+test("parseSnippet ignores legacy placement and invalid order values", () => {
+  for (const placement of ["prepend", "append", "middle"]) {
+    assert.deepEqual(parseSnippet("x", snippet({ placement, order: "soon" }, "Body")), { id: "x", body: "Body" });
+  }
 });
 
 test("parseSnippet recognizes enabled: false without a body", () => {
@@ -73,11 +73,11 @@ test("project overrides global, which overrides bundled, field by field", () => 
     { source: "project", directory: project },
   ]);
 
-  assert.deepEqual(snippets.map((s) => s.id), ["team", "tweak", "keep", "personal"]);
+  assert.deepEqual(snippets.map((s) => s.id), ["keep", "team", "personal", "tweak"]);
   const tweak = snippets.find((s) => s.id === "tweak");
   assert.equal(tweak.name, "Tweak", "unset fields are inherited");
   assert.equal(tweak.description, "global");
-  assert.equal(tweak.placement, "prepend");
+  assert.equal("placement" in tweak, false);
   assert.equal(tweak.order, 9);
   assert.equal(tweak.body, "Global tweak", "an empty body inherits the lower layer body");
   assert.equal(tweak.source, "project");
@@ -100,18 +100,65 @@ test("new snippets without a body are skipped and defaults are applied", () => {
   const [bare, ...rest] = loadSnippets([{ source: "global", directory }]);
   assert.equal(rest.length, 0);
   assert.deepEqual(
-    { name: bare.name, description: bare.description, placement: bare.placement, order: bare.order },
-    { name: "bare", description: "", placement: "append", order: 9999 },
+    { name: bare.name, description: bare.description, order: bare.order },
+    { name: "bare", description: "", order: 9999 },
   );
 });
 
-test("applySnippets wraps text with prepend and append bodies", () => {
-  const active = [
-    { placement: "prepend", body: "P1" },
-    { placement: "prepend", body: "P2" },
-    { placement: "append", body: "A1" },
-  ];
-  assert.equal(applySnippets("Message", active), "P1\n\nP2\n\nMessage\n\nA1");
+test("applySnippets appends one guidance block regardless of legacy placement", () => {
+  const active = [{ placement: "prepend", body: "First" }, { placement: "append", body: "Second" }];
+  assert.equal(applySnippets("Message", active),
+    "<user_request>\nMessage\n</user_request>\n\n<request_guidance>\nFirst\n\nSecond\n</request_guidance>");
+});
+
+test("applySnippets preserves request and guidance text, including Markdown and whitespace", () => {
+  const text = "  ## Instructions\r\n```xml\r\n<example>\n\n";
+  const body = "# Rule\n- One\n- Two\n";
+  assert.equal(applySnippets(text, [{ body }]),
+    `<user_request>\n${text}\n</user_request>\n\n<request_guidance>\n${body}\n</request_guidance>`);
+  assert.equal(applySnippets(text, []), text);
+  assert.equal(applySnippets("", []), "");
+  assert.equal(applySnippets("", [{ body }]),
+    `<user_request>\n\n</user_request>\n\n<request_guidance>\n${body}\n</request_guidance>`);
+});
+
+test("delimiter selection checks opening and closing tags in both sections", () => {
+  for (const tag of ["user_request", "request_guidance"]) {
+    for (const delimiter of [`<${tag}>`, `</${tag}>`]) {
+      for (const inRequest of [true, false]) {
+        const text = inRequest ? delimiter : "Request";
+        const body = inRequest ? "Guidance" : delimiter;
+        assert.equal(applySnippets(text, [{ body }]),
+          `<user_request_1>\n${text}\n</user_request_1>\n\n<request_guidance_1>\n${body}\n</request_guidance_1>`);
+      }
+    }
+  }
+  const text = "<user_request>\n</request_guidance_1>\n<user_request_2>";
+  const body = "</request_guidance_3>";
+  assert.equal(applySnippets(text, [{ body }]),
+    `<user_request_4>\n${text}\n</user_request_4>\n\n<request_guidance_4>\n${body}\n</request_guidance_4>`);
+});
+
+test("sort ties use name and then ID without legacy placement groups", (t) => {
+  const directory = temporaryDirectory({
+    "b.md": snippet({ name: "Same", order: 1, placement: "prepend" }, "B"),
+    "a.md": snippet({ name: "Same", order: 1, placement: "append" }, "A"),
+    "z.md": snippet({ name: "Earlier", order: 1 }, "Z"),
+  });
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  assert.deepEqual(loadSnippets([{ source: "global", directory }]).map(s => s.id), ["z", "a", "b"]);
+});
+
+test("bundled snippets omit placement and uncertainty snippets avoid confidence thresholds", () => {
+  const directory = new URL("../extensions/prompt-snippets/snippets/", import.meta.url);
+  for (const file of readdirSync(directory)) {
+    const raw = readFileSync(new URL(file, directory), "utf8");
+    assert.doesNotMatch(raw, /^placement:/m);
+    if (["ask-questions.md", "verify-not-assume.md"].includes(file)) {
+      assert.doesNotMatch(raw, /95%|100%|slightly unsure/);
+      assert.match(raw, /materially/);
+    }
+  }
 });
 
 test("parseSettings defaults, overrides, and disables the shortcut", () => {

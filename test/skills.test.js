@@ -58,11 +58,20 @@ test("skill command insertion preserves drafts and refuses existing slash comman
   }
 });
 
-test("snippets surround skill arguments without hiding the command from native expansion", () => {
-  const active = [{ placement: "prepend", body: "Before" }, { placement: "append", body: "After" }];
-  assert.equal(applyInputSnippets("/skill:review request", active), "/skill:review Before\n\nrequest\n\nAfter");
-  assert.equal(applyInputSnippets("/skill:review", active), "/skill:review Before\n\n\n\nAfter");
-  assert.equal(applyInputSnippets("regular text", active), "Before\n\nregular text\n\nAfter");
+test("guidance follows skill arguments without hiding the command from native expansion", () => {
+  const active = [{ body: "First" }, { body: "Second" }];
+  const wrapped = text => `<user_request>\n${text}\n</user_request>\n\n<request_guidance>\nFirst\n\nSecond\n</request_guidance>`;
+  assert.equal(applyInputSnippets("/skill:review request", active), `/skill:review ${wrapped("request")}`);
+  assert.equal(applyInputSnippets("/skill:review", active), `/skill:review ${wrapped("")}`);
+  assert.equal(applyInputSnippets("regular text", active), wrapped("regular text"));
   assert.equal(applyInputSnippets("/skill:review line one\nline two", active),
-    "/skill:review Before\n\nline one\nline two\n\nAfter");
+    `/skill:review ${wrapped("line one\nline two")}`);
+  assert.equal(applyInputSnippets("/skill:review <user_request>", active),
+    "/skill:review <user_request_1>\n<user_request>\n</user_request_1>\n\n<request_guidance_1>\nFirst\n\nSecond\n</request_guidance_1>");
+});
+
+test("no selected snippets leave regular input and skill commands unchanged", () => {
+  for (const text of ["text", "/skill:review", "/skill:review ", "/skill:review  request\n"]) {
+    assert.equal(applyInputSnippets(text, []), text);
+  }
 });

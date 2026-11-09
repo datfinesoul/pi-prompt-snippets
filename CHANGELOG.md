@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
+### Changed
+
+- Replace prepend and append groups with one guidance list, sorted by order, name, and ID.
+- Append selected snippet bodies after the request in XML-style sections. Preserve the request text and choose alternate delimiters when either section contains matching tags.
+- Remove `placement` from bundled snippets. Ignore the field in existing custom snippets without changing their files.
+- Replace confidence thresholds in Ask questions and Verify, don't assume with checks for consequential uncertainty. Keep explicit confirmation in Ask questions.
+
 ## [0.3.0] - 2026-11-09
 
 ### Added
@@ -48,7 +57,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Protection against applying snippets twice when the extension is loaded more than once.
 - Automated tests and open source project documentation.
 
-[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.0...v0.1.1
