@@ -31,12 +31,14 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   let command;
   let shortcut;
   let commands = [];
+  let commandReads = 0;
+  let shortcutKey;
   let editorText = "";
   const notifications = [];
   extension({
-    getCommands() { return commands; },
+    getCommands() { commandReads++; return commands; },
     on(name, handler) { handlers[name] = handler; },
-    registerShortcut(_key, value) { shortcut = value; },
+    registerShortcut(key, value) { shortcutKey = key; shortcut = value; },
     registerCommand(_name, value) { command = value; },
   });
   let interact;
@@ -199,6 +201,60 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.equal((await consume()).action, "continue");
     assert.deepEqual(notifications, []);
 
+    // Visibility merges defaults, global settings, and trusted project settings.
+    const globalSettingsPath = join(agentDir, "prompt-snippets.json");
+    const projectSettingsPath = join(directory, ".pi", "prompt-snippets.json");
+    mkdirSync(join(directory, ".pi"), { recursive: true });
+    ctx.cwd = directory;
+    ctx.isProjectTrusted = () => false;
+    const menuHasSkills = async (expected) => {
+      const before = commandReads;
+      interact = (picker, render) => {
+        if (expected) assert.match(render(), /SKILLS — on-demand only/);
+        else assert.doesNotMatch(render(), /SKILLS|manual/);
+        picker.handleInput("\x1b");
+      };
+      await command.handler("", ctx);
+      assert.equal(commandReads, before + (expected ? 1 : 0), "Disabled menus must skip skill discovery");
+    };
+    writeFileSync(projectSettingsPath, "invalid JSON");
+    await menuHasSkills(true); // Untrusted project settings are not read.
+    assert.deepEqual(notifications, []);
+    writeFileSync(globalSettingsPath, '{"showOnDemandSkills":false}');
+    await menuHasSkills(false);
+    assert.deepEqual(notifications, []);
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":true,"shortcut":false}');
+    await menuHasSkills(false); // Untrusted project cannot enable the section.
+    ctx.isProjectTrusted = () => true;
+    await menuHasSkills(true); // Trusted project overrides global false.
+    assert.ok(shortcut);
+    assert.equal(shortcutKey, "ctrl+\\"); // Project cannot disable the global shortcut.
+    writeFileSync(projectSettingsPath, "{}");
+    await menuHasSkills(false); // Omitted project field inherits global false.
+    writeFileSync(globalSettingsPath, '{"showOnDemandSkills":true}');
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":false}');
+    await menuHasSkills(false); // Trusted project can hide a globally enabled section.
+
+    // Typed skill commands and snippet selection work with the section hidden.
+    reset();
+    interact = picker => { picker.handleInput("1"); picker.handleInput("\r"); };
+    await command.handler("", ctx);
+    const hiddenInput = await handlers.input({ text: "/skill:manual request", source: "interactive" }, ctx);
+    assert.equal(hiddenInput.action, "transform");
+    assert.match(hiddenInput.text, /^\/skill:manual /);
+    assert.ok(hiddenInput.text.includes("request"));
+    assert.equal((await consume()).action, "continue");
+
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":"false"}');
+    await menuHasSkills(true); // Invalid project layer falls back to global true.
+    assert.match(notifications.pop(), /"showOnDemandSkills" must be a boolean/);
+    writeFileSync(globalSettingsPath, '{"showOnDemandSkills":false}');
+    await menuHasSkills(false); // Invalid project layer preserves global false too.
+    assert.match(notifications.pop(), /"showOnDemandSkills" must be a boolean/);
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":true}');
+    await menuHasSkills(true); // Reopening the menu reads edits without /reload.
+    assert.deepEqual(notifications, []);
+
     // The skills section works even when every bundled snippet is disabled.
     const overrides = join(directory, ".pi", "prompt-snippets");
     mkdirSync(overrides, { recursive: true });
@@ -219,6 +275,13 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     await command.handler("", ctx);
     assert.equal(editorText, "/skill:manual skills only");
     assert.equal((await consume()).action, "continue");
+    assert.deepEqual(notifications, []);
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":false}');
+    const beforeEmptyMenu = commandReads;
+    interact = () => assert.fail("An empty disabled menu must not open");
+    await command.handler("", ctx);
+    assert.equal(commandReads, beforeEmptyMenu);
+    assert.match(notifications.pop(), /^No snippets found\./);
     assert.deepEqual(notifications, []);
   } finally {
     rmSync(directory, { recursive: true, force: true });

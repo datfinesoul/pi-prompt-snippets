@@ -13,11 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add an on-demand skills section to the snippet menu for loaded skills with `disable-model-invocation: true`.
 - Preview skill instructions and source paths. Insert a selected skill command into the editor without sending it.
 - Preserve the draft as skill arguments and apply snippet checkbox changes. Refuse insertion when the draft starts with a slash command.
+- Add `showOnDemandSkills` to global and trusted project settings. It defaults to `true` and refreshes when the menu opens. Disabling it hides the skills section and skips skill discovery.
 
 ### Fixed
 
 - Keep skill commands intact when snippets modify their arguments, so Pi can expand the selected skill.
 - Leave non-interactive input unchanged without consuming selected snippets.
+- Warn about invalid or unreadable settings files and preserve lower-layer settings instead of failing extension loading.
 
 ## [0.2.0] - 2026-10-21
 

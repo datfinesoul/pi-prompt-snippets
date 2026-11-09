@@ -68,7 +68,7 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 
 ### On-demand skills
 
-The **SKILLS — on-demand only** section follows PREPEND and APPEND. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
+The **SKILLS — on-demand only** section follows PREPEND and APPEND. It appears by default. Set [`showOnDemandSkills`](#menu-settings) to `false` to hide it. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
 
 ```yaml
 disable-model-invocation: true
@@ -150,6 +150,41 @@ Frontmatter is optional; a file without it is used entirely as the body. Invalid
 
 Files are rescanned whenever the menu opens or a message is sent, so edits take effect without `/reload`. Only regular `.md` files whose names start with a letter or digit and contain only letters, digits, dots, underscores, or hyphens are loaded; symbolic links are ignored. Each layer is limited to 256 directory entries and each file to 256 KiB.
 
+## Menu settings
+
+Menu settings use these layers, from lowest to highest precedence:
+
+| Layer | Location | Notes |
+|---|---|---|
+| Default | Built into the extension | `showOnDemandSkills: true` |
+| Global | `~/.pi/agent/prompt-snippets.json` | Applies to every project and follows `PI_CODING_AGENT_DIR` |
+| Project | `<project>/.pi/prompt-snippets.json` | Overrides global menu settings only after Pi grants project trust |
+
+An omitted field inherits its lower-layer value. A trusted project can enable the skills section even when global settings disable it. Installation scope does not change these layers.
+
+### Hide on-demand skills
+
+Add this setting to `.pi/prompt-snippets.json` for one trusted project, or to the global settings file for every project:
+
+```json
+{
+  "showOnDemandSkills": false
+}
+```
+
+When disabled, the menu skips skill discovery and skill file reads. Snippet selection and typed `/skill:name` commands still work. Set the value to `true` to restore the section.
+
+The menu reads these settings each time it opens, so visibility changes do not need `/reload`. Invalid or unreadable settings files produce warnings and leave the lower-layer settings unchanged. Missing files simply inherit their lower-layer settings.
+
+### Settings reference
+
+| Field | Default | Scope | When changes apply |
+|---|---|---|---|
+| `showOnDemandSkills` | `true` | Global and trusted project | Next menu opening |
+| `shortcut` | `ctrl+\\` | Global only | After `/reload` |
+
+`showOnDemandSkills` accepts only JSON booleans. A project `shortcut` value is ignored. The global file can contain both fields.
+
 ## Keyboard shortcut
 
 The default shortcut is <kbd>Ctrl</kbd>+<kbd>\\</kbd>. It was chosen because it works the same way on macOS and Linux terminals without extra setup and does not conflict with Pi's built-in keybindings. Option/Alt shortcuts such as <kbd>Alt</kbd>+<kbd>S</kbd> are unreliable on macOS: Terminal.app and iTerm2 type a character such as `ß` unless Option is configured to act as Meta.
@@ -162,7 +197,9 @@ Choose a different shortcut, or disable it, in `~/.pi/agent/prompt-snippets.json
 }
 ```
 
-Use `null` or `false` to disable the shortcut and use only `/snippets`. Keys use Pi's [key syntax](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/keybindings.md#key-syntax). Shortcuts with <kbd>Shift</kbd> on a <kbd>Ctrl</kbd> letter or with <kbd>Super</kbd> require a terminal with extended keyboard support, such as Kitty, Ghostty, WezTerm, or iTerm2. The shortcut is read when the extension loads; run `/reload` after changing it. It is a global setting only, because Pi registers shortcuts before project trust is resolved.
+Use `null` or `false` to disable the shortcut and use only `/snippets`. Keys use Pi's [key syntax](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/keybindings.md#key-syntax). Shortcuts with <kbd>Shift</kbd> on a <kbd>Ctrl</kbd> letter or with <kbd>Super</kbd> require a terminal with extended keyboard support, such as Kitty, Ghostty, WezTerm, or iTerm2. Run `/reload` after changing the shortcut.
+
+**Configuration scope:** Snippet files and menu visibility support project overrides. The `shortcut` setting is global-only because the extension registers it during loading, before project trust is available. Configure it in `~/.pi/agent/prompt-snippets.json`, which follows `PI_CODING_AGENT_DIR`. A project `.pi/prompt-snippets.json` cannot override the shortcut. Its menu settings apply only after project trust is available.
 
 ## How it works
 

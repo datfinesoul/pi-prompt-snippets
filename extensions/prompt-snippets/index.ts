@@ -25,6 +25,7 @@ const bundledSnippetsDirectory = join(extensionDirectory, "snippets");
 const globalSnippetsDirectory = join(getAgentDir(), "prompt-snippets");
 const settingsPath = join(getAgentDir(), "prompt-snippets.json");
 const PROJECT_SNIPPETS_DIRECTORY = join(".pi", "prompt-snippets");
+const PROJECT_SETTINGS_PATH = join(".pi", "prompt-snippets.json");
 const WIDGET_ID = "prompt-snippets";
 
 /**
@@ -108,12 +109,20 @@ export default function promptSnippets(pi: ExtensionAPI) {
 
     refresh(ctx);
 
-    const { skills, warnings } = loadOnDemandSkills(pi.getCommands(), parseFrontmatter);
+    // Menu settings can honor project trust and refresh without re-registering shortcuts.
+    const onWarning = (message: string) => ctx.ui.notify(safeDisplay(message), "warning");
+    const globalSettings = readSettings(settingsPath, { onWarning });
+    const menuSettings = ctx.isProjectTrusted()
+      ? readSettings(join(ctx.cwd, PROJECT_SETTINGS_PATH), { defaults: globalSettings, project: true, onWarning })
+      : globalSettings;
+    const { skills, warnings } = menuSettings.showOnDemandSkills
+      ? loadOnDemandSkills(pi.getCommands(), parseFrontmatter)
+      : { skills: [], warnings: [] };
     for (const warning of warnings) ctx.ui.notify(warning, "warning");
 
     if (snippets.length === 0 && skills.length === 0) {
       ctx.ui.notify(
-        `No snippets or on-demand skills found. Add Markdown files to ${globalSnippetsDirectory} or ${PROJECT_SNIPPETS_DIRECTORY}/`,
+        `${menuSettings.showOnDemandSkills ? "No snippets or on-demand skills found." : "No snippets found."} Add Markdown files to ${globalSnippetsDirectory} or ${PROJECT_SNIPPETS_DIRECTORY}/`,
         "warning",
       );
       updateWidget(ctx);
