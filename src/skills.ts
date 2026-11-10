@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
-import { applySnippets, MAX_SNIPPET_BYTES } from "./snippets.js";
+import { applySnippets, MAX_SNIPPET_BYTES } from "./snippets.ts";
 
 /**
  * @typedef {{
@@ -54,6 +54,7 @@ export function skillEditorText(command, draft) {
 
 /** Keep the command prefix intact so Pi expands the skill after input hooks. */
 export function applyInputSnippets(text, active) {
+  if (active.length === 0) return text;
   const skill = text.match(/^(\/skill:[^\s]+)(?: ([\s\S]*))?$/);
   return skill
     ? `${skill[1]} ${applySnippets(skill[2] ?? "", active)}`

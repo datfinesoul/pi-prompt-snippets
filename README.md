@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi adds them before or after your next message. Each snippet is a short standalone instruction chosen for one message at a time. The same menu also lists on-demand skills and inserts their commands into the editor.
+A standalone [Pi](https://github.com/earendil-works/pi) extension for mixing and matching small, reusable prompt rules. Select snippets from a menu and Pi appends them in one instructions block after your next request. Each snippet is a short standalone instruction chosen for one message at a time. The same menu also lists on-demand skills and inserts their commands into the editor.
 
 Based on the original [Prompt Snippets extension](https://github.com/amosblomqvist/pi-config/tree/main/extensions/prompt-snippets) created by [Amos Blomqvist](https://github.com/amosblomqvist). This package expands that work with standalone packaging, layered configuration, and additional safeguards.
 
@@ -60,15 +60,17 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 
 - Press <kbd>Ctrl</kbd>+<kbd>\\</kbd> or run `/snippets` to open the toggle menu.
 - Use <kbd>Up</kbd>/<kbd>Down</kbd> to navigate and <kbd>Space</kbd> or <kbd>1</kbd>–<kbd>9</kbd> to toggle snippets (`●` selected, `○` unselected). Number keys toggle the corresponding item without moving the cursor; items after nine use a dot instead of a number.
+- Press <kbd>Up</kbd> at the first item to move to the last item, including skills when shown. Press <kbd>Down</kbd> at the last item to return to the first.
 - Press <kbd>Enter</kbd> to apply the checked snippets, or the highlighted snippet if none are checked. This selects snippets for your next message; it does not copy to the clipboard. Press <kbd>Esc</kbd> to cancel without changing your active snippets.
 - Press <kbd>Right</kbd> or <kbd>Tab</kbd> to preview the highlighted snippet, including the layer and file it came from. Use <kbd>Up</kbd>/<kbd>Down</kbd> to scroll, <kbd>Left</kbd>, <kbd>Tab</kbd>, or <kbd>Esc</kbd> to return to the list, and <kbd>Enter</kbd> to apply.
 - Active snippets appear in a widget above the editor. Snippets from the global or project layer are tagged in the menu.
-- On send, the enabled prepend snippets, your message, and the enabled append snippets are combined in that order, separated by blank lines.
-- Selections reset after each sent message and at session start.
+- On send, Pi puts your request first and the selected snippets in one instructions block after it. XML-style tags separate the sections.
+- Snippets appear in one list, sorted by `order`, then name, then ID. The widget shows the selected instructions.
+- Selections reset after each sent message and at session start. The injected text remains in conversation history while Pi retains that history.
 
 ### On-demand skills
 
-The **SKILLS — on-demand only** section follows PREPEND and APPEND. It appears by default. Set [`showOnDemandSkills`](#menu-settings) to `false` to hide it. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
+The **SKILLS — on-demand only** section follows INSTRUCTIONS. It appears by default. Set [`showOnDemandSkills`](#menu-settings) to `false` to hide it. It lists only skills available to the current Pi session with this `SKILL.md` frontmatter field:
 
 ```yaml
 disable-model-invocation: true
@@ -109,7 +111,6 @@ Create `~/.pi/agent/prompt-snippets/concise.md`, or `.pi/prompt-snippets/concise
 ---
 name: Concise
 description: Keep answers short and to the point
-placement: prepend
 order: 10
 ---
 Keep your response concise. Skip preamble and unnecessary explanation.
@@ -117,11 +118,10 @@ Keep your response concise. Skip preamble and unnecessary explanation.
 
 ### Change a bundled snippet
 
-Override only the fields you want to change. This example moves the bundled `diagnose-report` snippet to the prepend group and keeps its text:
+Override only the fields you want to change. This example moves the bundled `diagnose-report` snippet earlier in the list and keeps its text:
 
 ```markdown
 ---
-placement: prepend
 order: 5
 ---
 ```
@@ -142,9 +142,10 @@ enabled: false
 |---|---|---|
 | `name` | No | Display name; defaults to the ID |
 | `description` | No | Shown next to the name in the toggle menu |
-| `placement` | No | `prepend` or `append`; defaults to `append` |
-| `order` | No | Integer sort order within the placement group; defaults to `9999`, with ties broken by name |
+| `order` | No | Integer sort order; defaults to `9999`, with ties broken by name, then ID |
 | `enabled` | No | Set to `false` to remove the snippet from lower layers |
+
+The extension ignores legacy `placement` fields in custom snippets. These snippets still load, but all selected snippets enter the appended instructions block.
 
 Frontmatter is optional; a file without it is used entirely as the body. Invalid field values are ignored rather than hiding the snippet. A new snippet without a body is skipped.
 
@@ -203,7 +204,31 @@ Use `null` or `false` to disable the shortcut and use only `/snippets`. Keys use
 
 ## How it works
 
-The extension transforms only `interactive` input while at least one snippet is selected. It does not alter extension-injected messages, non-interactive prompts, or tool calls. For `/skill:name` input, snippets surround the arguments while the command remains first. Pi then expands the skill through its normal command handler. If the extension is loaded more than once, the copies share their selection and only the most recently loaded copy transforms input, so snippets are never added twice. Snippets are prompt text, not a security boundary; see [SECURITY.md](SECURITY.md).
+The extension transforms only `interactive` input while at least one snippet is selected. It does not alter extension-injected messages, non-interactive prompts, or tool calls. Without a selection, the input stays unchanged.
+
+### Injected prompt structure
+
+The request stays unchanged inside the first section. Selected snippet bodies form the second section, separated by blank lines. Snippet names and frontmatter do not enter the prompt.
+
+```text
+<user_request>
+Your original message.
+</user_request>
+
+<request_instructions>
+First selected snippet.
+
+Second selected snippet.
+</request_instructions>
+```
+
+If either section contains an opening or closing delimiter, the extension tries matching tags with numeric suffixes. For example, it tries `user_request_1` and `request_instructions_1` until neither section contains the chosen delimiters. It does not escape or change the contents.
+
+For `/skill:name` input, the command stays first. The request section contains its arguments, and the instructions section follows. Pi then expands the skill through its normal command handler.
+
+The tags are plain-text labels. They do not create higher-priority instructions or enforce action restrictions. Snippets are prompt text, not a security boundary. See [SECURITY.md](SECURITY.md).
+
+If the extension loads more than once, the copies share their selection. Only the most recently loaded copy transforms input, so snippets are never added twice.
 
 ## Development
 
@@ -215,6 +240,10 @@ npm run pack:check
 ```
 
 Use `pnpm test` and `pnpm run pack:check` when you use pnpm.
+
+Runtime helpers use `.ts` files without a build step. This avoids stale JavaScript helper imports during `/reload` in Pi 1.5.0. Unit tests import the helpers directly through Node.js.
+
+Set `PI_CODING_AGENT_ENTRY` to the installed Pi `dist/index.js` path to include the installed-Pi integration tests. Without this variable, those tests report a skip. The reload test checks an upgrade from JavaScript helpers and repeated helper edits in one process. It changes temporary copies only.
 
 Each feature branch that triggers CI gets one version update relative to its base. Keep that version unchanged throughout the branch. Record subsequent user-visible changes under the same matching `## [<version>] - <date>` changelog heading. Do not increment the patch version for each edit, fix, or conversation turn. CI requires the branch version to exceed its base version. Pull requests that change only Markdown skipped by CI are exempt. After merge and successful CI, the Release workflow tags the tested commit `v<version>`. Merges that do not change the version are not tagged.
 

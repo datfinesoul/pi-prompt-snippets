@@ -34,6 +34,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   let commandReads = 0;
   let shortcutKey;
   let editorText = "";
+  let widget;
   const notifications = [];
   extension({
     getCommands() { commandReads++; return commands; },
@@ -46,7 +47,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     mode: "tui", hasUI: true, cwd: process.cwd(), isProjectTrusted: () => false,
     ui: {
       theme: { fg: (_color, value) => value, bold: value => value },
-      setWidget() {},
+      setWidget(_id, lines) { widget = lines; },
       notify(message) { notifications.push(message); },
       getEditorText() { return editorText; },
       setEditorText(text) { editorText = text; },
@@ -69,17 +70,26 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   const consume = () => handlers.input({ text: "hello", source: "interactive" }, ctx);
   reset();
   interact = (picker, render, tui) => {
-    assert.match(render(), /> ○ 1 /);
-    assert.doesNotMatch(render(), /\[[ x]\]/);
+    assert.match(render(), /> ○ 1 Ask questions/);
+    assert.match(render(), /INSTRUCTIONS — for this request/);
+    assert.doesNotMatch(render(), /PREPEND|APPEND|\[[ x]\]/);
     picker.handleInput("1");
     assert.match(render(), /> ● 1 /);
     picker.handleInput("1");
     assert.match(render(), /> ○ 1 /);
     picker.handleInput("9"); // Absent numbered item is ignored.
-    picker.handleInput("\x1b[A"); // Navigation clamps at the first item.
+    picker.handleInput("\x1b[A"); // Up wraps from the first snippet to the last.
+    assert.match(render(), /> ○ 5 Diagnose, don't fix/);
+    picker.handleInput("\x1b[B"); // Down wraps from the last snippet to the first.
+    assert.match(render(), /> ○ 1 /);
+    picker.handleInput("\x1b[B"); // Ordinary movement still advances one item.
+    assert.match(render(), /> ○ 2 Session kickoff/);
+    picker.handleInput("\x1b[A");
     assert.match(render(), /> ○ 1 /);
     picker.handleInput("\x1b[C");
     assert.match(render(), /Preview:/);
+    assert.match(render(), /order 10 · bundled/);
+    assert.doesNotMatch(render(), /prepend|append/);
     picker.handleInput("\x1b[D");
     assert.match(render(), /Prompt snippets/);
     for (const height of [12, 16, 24]) {
@@ -89,9 +99,12 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     picker.handleInput("\r"); // Highlight fallback.
   };
   await command.handler("", ctx);
+  assert.deepEqual(widget, ["Instructions: Ask questions"]);
   const fallback = await consume();
+  assert.equal(widget, undefined);
   assert.equal(fallback.action, "transform");
-  assert.ok(fallback.text.includes("hello"));
+  assert.match(fallback.text, /^<user_request>\nhello\n<\/user_request>\n\n<request_instructions>\n/);
+  assert.match(fallback.text, /Wait for my explicit confirmation before proceeding\.\n<\/request_instructions>$/);
   assert.equal((await consume()).action, "continue");
 
   reset();
@@ -132,6 +145,10 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     interact = (picker, render, tui) => {
       assert.match(render(), /SKILLS — on-demand only/);
       assert.doesNotMatch(render(), /automatic|quoted/);
+      picker.handleInput("\x1b[A"); // The last item includes on-demand skills.
+      assert.match(render(), /> ↳ · manual/);
+      picker.handleInput("\x1b[B"); // Down wraps from the last skill to the first snippet.
+      assert.match(render(), /> ○ 1 Ask questions/);
       picker.handleInput("1");
       moveToSkill(picker, render);
       picker.handleInput(" "); // Skills never become checked snippets.
@@ -182,7 +199,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.equal(editorText, "unchanged draft");
     assert.equal((await consume()).action, "continue");
 
-    // Prepend snippets must not hide a skill command from Pi's expansion.
+    // Request delimiters must not hide a skill command from Pi's expansion.
     reset();
     interact = picker => { picker.handleInput("1"); picker.handleInput("\r"); };
     await command.handler("", ctx);
@@ -200,6 +217,26 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.ok(expanded.includes(fallback.text.replace("hello", "request")));
     assert.equal((await consume()).action, "continue");
     assert.deepEqual(notifications, []);
+
+    // Legacy project placement is ignored in the menu, widget, and injected prompt.
+    const legacyDirectory = join(directory, ".pi", "prompt-snippets");
+    mkdirSync(legacyDirectory, { recursive: true });
+    writeFileSync(join(legacyDirectory, "legacy.md"),
+      "---\nname: Legacy\nplacement: prepend\norder: -1\n---\nLegacy guidance.");
+    ctx.cwd = directory;
+    ctx.isProjectTrusted = () => true;
+    reset();
+    interact = (picker, render) => {
+      assert.match(render(), /> ○ 1 Legacy/);
+      assert.doesNotMatch(render(), /PREPEND|APPEND/);
+      picker.handleInput("1");
+      picker.handleInput("\r");
+    };
+    await command.handler("", ctx);
+    assert.deepEqual(widget, ["Instructions: Legacy"]);
+    assert.deepEqual(await consume(), { action: "transform",
+      text: "<user_request>\nhello\n</user_request>\n\n<request_instructions>\nLegacy guidance.\n</request_instructions>" });
+    rmSync(legacyDirectory, { recursive: true });
 
     // Visibility merges defaults, global settings, and trusted project settings.
     const globalSettingsPath = join(agentDir, "prompt-snippets.json");
@@ -267,7 +304,11 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     editorText = "skills only";
     interact = (picker, render) => {
       assert.match(render(), /> ↳ · manual/);
-      assert.doesNotMatch(render(), /PREPEND|APPEND/);
+      assert.doesNotMatch(render(), /INSTRUCTIONS|PREPEND|APPEND/);
+      picker.handleInput("\x1b[A"); // A one-item list stays on that item in both directions.
+      assert.match(render(), /> ↳ · manual/);
+      picker.handleInput("\x1b[B");
+      assert.match(render(), /> ↳ · manual/);
       picker.handleInput("1");
       picker.handleInput(" ");
       picker.handleInput("\r");
