@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
-import { applySnippets, MAX_SNIPPET_BYTES } from "./snippets.js";
+import { applySnippets, MAX_SNIPPET_BYTES } from "./snippets.ts";
 
 /**
  * @typedef {{

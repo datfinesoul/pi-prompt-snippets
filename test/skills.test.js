@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { applyInputSnippets, loadOnDemandSkills, skillEditorText } from "../src/skills.js";
+import { applyInputSnippets, loadOnDemandSkills, skillEditorText } from "../src/skills.ts";
 
 // The host supplies its YAML parser. JSON fixtures isolate the selection logic.
 const parse = text => ({ frontmatter: JSON.parse(text), body: "Instructions" });

@@ -12,10 +12,10 @@ import { fileURLToPath } from "node:url";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import { loadSnippets, readSettings } from "../../src/snippets.js";
-import type { Snippet, SnippetLayer } from "../../src/snippets.js";
-import { applyInputSnippets, loadOnDemandSkills, skillEditorText } from "../../src/skills.js";
-import type { SkillItem } from "../../src/skills.js";
+import { loadSnippets, readSettings } from "../../src/snippets.ts";
+import type { Snippet, SnippetLayer } from "../../src/snippets.ts";
+import { applyInputSnippets, loadOnDemandSkills, skillEditorText } from "../../src/skills.ts";
+import type { SkillItem } from "../../src/skills.ts";
 
 type MenuItem = Snippet | SkillItem;
 const isSkill = (item: MenuItem): item is SkillItem => "kind" in item && item.kind === "skill";

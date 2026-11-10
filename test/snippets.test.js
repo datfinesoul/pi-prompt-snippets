@@ -12,7 +12,7 @@ import {
   parseSnippet,
   readLayer,
   readSettings,
-} from "../src/snippets.js";
+} from "../src/snippets.ts";
 
 function temporaryDirectory(files = {}) {
   const directory = mkdtempSync(join(tmpdir(), "pi-prompt-snippets-"));

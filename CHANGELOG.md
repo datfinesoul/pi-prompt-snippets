@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Replace confidence thresholds in Ask questions and Verify, don't assume with checks for consequential uncertainty. Keep explicit confirmation in Ask questions.
 - Use STE100-inspired wording in these two snippets, with one instruction per sentence.
 
+### Fixed
+
+- Use TypeScript runtime helpers so `/reload` refreshes imported logic instead of retaining cached JavaScript helpers in Pi 1.5.0.
+- Test an upgrade from JavaScript helpers and repeated changes to direct and transitive helpers through Pi's loader in one process.
+
 ## [0.3.0] - 2026-11-09
 
 ### Added
