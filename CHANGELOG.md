@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Remove `placement` from bundled snippets. Ignore the field in existing custom snippets without changing their files.
 - Replace confidence thresholds in Ask questions and Verify, don't assume with checks for consequential uncertainty. Keep explicit confirmation in Ask questions.
 - Use STE100-inspired wording in these two snippets, with one instruction per sentence.
+- Require Ask questions to use `ask_user_question` and explain answer trade-offs. Request the user's confirmation in the same turn as the summary. Do not treat cancellation as confirmation.
 
 ### Fixed
 
