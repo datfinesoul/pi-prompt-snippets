@@ -1,6 +1,6 @@
 {
   "name": "@datfinesoul/pi-prompt-snippets",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A Pi extension for toggling reusable prompt snippets in one instructions block after the next request.",
   "type": "module",
   "license": "MIT",

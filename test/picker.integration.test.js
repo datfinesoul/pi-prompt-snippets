@@ -104,7 +104,11 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
   assert.equal(widget, undefined);
   assert.equal(fallback.action, "transform");
   assert.match(fallback.text, /^<user_request>\nhello\n<\/user_request>\n\n<request_instructions>\n/);
-  assert.match(fallback.text, /Wait for my explicit confirmation before proceeding\.\n<\/request_instructions>$/);
+  assert.match(fallback.text, /Use `ask_user_question` to ask questions\./);
+  assert.match(fallback.text, /Explain how each available answer affects complexity, usability, and relevant trade-offs\./);
+  assert.match(fallback.text, /Request the user's explicit confirmation with `ask_user_question` in the same turn as the summary\./);
+  assert.match(fallback.text, /Wait for the user's explicit confirmation before proceeding\./);
+  assert.match(fallback.text, /Do not treat a cancelled question as confirmation\.\n<\/request_instructions>$/);
   assert.equal((await consume()).action, "continue");
 
   reset();
