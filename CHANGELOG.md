@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-20
+
+### Fixed
+
+- Test skill discovery and menu updates through a real Pi reload. The previous reload test disabled on-demand skills, so no test covered the menu section or an added skill. The earlier report of a missing section came from JavaScript helpers that Pi kept cached across a reload. Version 0.4.0 changed those helpers to TypeScript, and a reload now picks up helper and skill changes without a restart.
+
 ## [0.4.1] - 2026-11-18
 
 ### Changed
