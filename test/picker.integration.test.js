@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -88,8 +88,8 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.match(render(), /> ○ 1 /);
     picker.handleInput("\x1b[C");
     assert.match(render(), /Preview:/);
-    assert.match(render(), /order 10 · bundled/);
-    assert.doesNotMatch(render(), /prepend|append/);
+    assert.match(render(), /bundled · /);
+    assert.doesNotMatch(render(), /order \d+|prepend|append/);
     picker.handleInput("\x1b[D");
     assert.match(render(), /Prompt snippets/);
     for (const height of [12, 16, 24]) {
@@ -222,7 +222,7 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     assert.equal((await consume()).action, "continue");
     assert.deepEqual(notifications, []);
 
-    // Legacy project placement is ignored in the menu, widget, and injected prompt.
+    // Legacy project placement and order are ignored in the menu, widget, and injected prompt.
     const legacyDirectory = join(directory, ".pi", "prompt-snippets");
     mkdirSync(legacyDirectory, { recursive: true });
     writeFileSync(join(legacyDirectory, "legacy.md"),
@@ -231,9 +231,11 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     ctx.isProjectTrusted = () => true;
     reset();
     interact = (picker, render) => {
-      assert.match(render(), /> ○ 1 Legacy/);
+      assert.match(render(), /Legacy/);
       assert.doesNotMatch(render(), /PREPEND|APPEND/);
-      picker.handleInput("1");
+      // Legacy order is ignored; the unlisted snippet follows the default list.
+      for (let i = 0; i < 5; i++) picker.handleInput("\x1b[B");
+      assert.match(render(), /> ○ 6 Legacy/);
       picker.handleInput("\r");
     };
     await command.handler("", ctx);
@@ -295,6 +297,100 @@ test("installed Pi snippet picker: selection, preview, confirmation and cancella
     writeFileSync(projectSettingsPath, '{"showOnDemandSkills":true}');
     await menuHasSkills(true); // Reopening the menu reads edits without /reload.
     assert.deepEqual(notifications, []);
+
+    // Reorder mode saves the full snippet order to the trusted project.
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":false}');
+    ctx.isProjectTrusted = () => true;
+    reset();
+    interact = (picker, render) => {
+      assert.match(render(), /> ○ 1 Ask questions/);
+      picker.handleInput("r");
+      assert.match(render(), /Prompt snippets — reorder/);
+      assert.match(render(), /Enter grab/);
+      picker.handleInput("\x1b[B"); // Move the cursor to Session kickoff.
+      assert.match(render(), /> ○ 2 Session kickoff/);
+      picker.handleInput("\r"); // Grab it.
+      assert.match(render(), /Move: Session kickoff/);
+      picker.handleInput("\x1b[A"); // Move it above Ask questions.
+      assert.match(render(), /> ↕ 1 Session kickoff/);
+      picker.handleInput("\r"); // Save and return to reorder mode.
+      assert.match(render(), /Prompt snippets — reorder/);
+      assert.match(render(), /> ○ 1 Session kickoff/);
+      picker.handleInput("\x1b"); // Exit reorder mode.
+      assert.match(render(), /> ○ 1 Session kickoff/);
+      picker.handleInput("\x1b"); // Cancel the menu.
+    };
+    await command.handler("", ctx);
+    assert.deepEqual(JSON.parse(readFileSync(projectSettingsPath, "utf8")), {
+      showOnDemandSkills: false,
+      order: ["session-kickoff", "ask-questions", "pr-title-description", "verify-not-assume", "diagnose-report"],
+    });
+    assert.deepEqual(notifications, []);
+
+    // Reopening the menu reads the saved project order.
+    reset();
+    interact = (picker, render) => {
+      assert.match(render(), /> ○ 1 Session kickoff/);
+      assert.match(render(), /○ 2 Ask questions/);
+      picker.handleInput("\x1b");
+    };
+    await command.handler("", ctx);
+
+    // Esc in move mode cancels the move and returns to reorder mode.
+    reset();
+    interact = (picker, render) => {
+      picker.handleInput("r");
+      assert.match(render(), /> ○ 1 Session kickoff/);
+      picker.handleInput("\r"); // Grab it.
+      picker.handleInput("\x1b[B"); // Move it below Ask questions.
+      assert.match(render(), /> ↕ 2 Session kickoff/);
+      picker.handleInput("\x1b"); // Cancel the move.
+      assert.match(render(), /Prompt snippets — reorder/);
+      assert.match(render(), /> ○ 1 Session kickoff/);
+      picker.handleInput("\x1b"); // Exit reorder mode.
+      picker.handleInput("\x1b"); // Cancel the menu.
+    };
+    await command.handler("", ctx);
+    assert.deepEqual(JSON.parse(readFileSync(projectSettingsPath, "utf8")).order, [
+      "session-kickoff", "ask-questions", "pr-title-description", "verify-not-assume", "diagnose-report",
+    ]);
+    assert.deepEqual(notifications, []);
+
+    // An untrusted project hides reorder mode, and the key is silent.
+    ctx.isProjectTrusted = () => false;
+    reset();
+    interact = (picker, render) => {
+      assert.doesNotMatch(render(), /r reorder/);
+      picker.handleInput("r");
+      assert.match(render(), /Prompt snippets/);
+      assert.doesNotMatch(render(), /— reorder/);
+      assert.deepEqual(notifications, []);
+      picker.handleInput("\x1b");
+    };
+    await command.handler("", ctx);
+    ctx.isProjectTrusted = () => true;
+    assert.deepEqual(notifications, []);
+
+    // A failed save warns, reverts the move, and leaves the project file unchanged.
+    writeFileSync(projectSettingsPath, "invalid JSON");
+    reset();
+    interact = (picker, render) => {
+      assert.match(notifications.pop(), /Prompt snippets settings: .*invalid JSON/);
+      picker.handleInput("r");
+      picker.handleInput("\r"); // Grab Ask questions.
+      picker.handleInput("\x1b[B"); // Move it below Session kickoff.
+      assert.match(render(), /> ↕ 2 Ask questions/);
+      picker.handleInput("\r"); // Save fails.
+      assert.match(render(), /Prompt snippets — reorder/);
+      assert.match(render(), /> ○ 1 Ask questions/);
+      assert.match(notifications.pop(), /Cannot save snippet order/);
+      picker.handleInput("\x1b");
+      picker.handleInput("\x1b");
+    };
+    await command.handler("", ctx);
+    assert.equal(readFileSync(projectSettingsPath, "utf8"), "invalid JSON");
+    assert.deepEqual(notifications, []);
+    writeFileSync(projectSettingsPath, '{"showOnDemandSkills":true}');
 
     // The skills section works even when every bundled snippet is disabled.
     const overrides = join(directory, ".pi", "prompt-snippets");

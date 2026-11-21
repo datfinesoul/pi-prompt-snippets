@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import { loadSnippets, readSettings } from "../../src/snippets.ts";
+import { loadSnippets, readSettings, writeProjectOrder } from "../../src/snippets.ts";
 import type { Snippet, SnippetLayer } from "../../src/snippets.ts";
 import { applyInputSnippets, loadOnDemandSkills, skillEditorText } from "../../src/skills.ts";
 import type { SkillItem } from "../../src/skills.ts";
@@ -60,6 +60,17 @@ function snippetLayers(ctx: ExtensionContext): SnippetLayer[] {
   return layers;
 }
 
+/** Read the effective menu settings. Project values require project trust. */
+function readMenuSettings(ctx: ExtensionContext, onWarning: (message: string) => void = () => {}) {
+  const globalSettings = readSettings(settingsPath, { onWarning });
+  if (!ctx.isProjectTrusted()) return globalSettings;
+  return readSettings(join(ctx.cwd, PROJECT_SETTINGS_PATH), {
+    defaults: globalSettings,
+    project: true,
+    onWarning,
+  });
+}
+
 export default function promptSnippets(pi: ExtensionAPI) {
   const instance = Symbol("prompt-snippets-instance");
   const shared: SharedState = globalRegistry[SHARED_STATE_KEY] ?? { owner: instance, enabled: new Set() };
@@ -71,8 +82,8 @@ export default function promptSnippets(pi: ExtensionAPI) {
   // Snippets last seen on disk (sorted). Refreshed whenever the menu opens or a message is sent.
   let snippets: Snippet[] = [];
 
-  function refresh(ctx: ExtensionContext) {
-    snippets = loadSnippets(snippetLayers(ctx));
+  function refresh(ctx: ExtensionContext, menuSettings = readMenuSettings(ctx)) {
+    snippets = loadSnippets(snippetLayers(ctx), menuSettings.order);
     // Drop toggles for snippets that no longer exist.
     for (const id of shared.enabled) {
       if (!snippets.some((s) => s.id === id)) shared.enabled.delete(id);
@@ -99,14 +110,10 @@ export default function promptSnippets(pi: ExtensionAPI) {
       return;
     }
 
-    refresh(ctx);
-
     // Menu settings can honor project trust and refresh without re-registering shortcuts.
     const onWarning = (message: string) => ctx.ui.notify(safeDisplay(message), "warning");
-    const globalSettings = readSettings(settingsPath, { onWarning });
-    const menuSettings = ctx.isProjectTrusted()
-      ? readSettings(join(ctx.cwd, PROJECT_SETTINGS_PATH), { defaults: globalSettings, project: true, onWarning })
-      : globalSettings;
+    const menuSettings = readMenuSettings(ctx, onWarning);
+    refresh(ctx, menuSettings);
     const { skills, warnings } = menuSettings.showOnDemandSkills
       ? loadOnDemandSkills(pi.getCommands(), parseFrontmatter)
       : { skills: [], warnings: [] };
@@ -126,17 +133,20 @@ export default function promptSnippets(pi: ExtensionAPI) {
     let editorText: string | undefined;
 
     const confirmed = await ctx.ui.custom<boolean>((tui, theme, _keybindings, done) => {
-      const snippetItems = snippets;
-      const items: MenuItem[] = [...snippetItems, ...skills];
+      const snippetItems = [...snippets];
+      let items: MenuItem[] = [...snippetItems, ...skills];
 
-      let mode: "list" | "preview" = "list";
+      let mode: "list" | "preview" | "reorder" | "move" = "list";
       let cursor = 0;
       let listScroll = 0;
       let previewScroll = 0;
+      let grabbedId: string | null = null;
+      let moveOrigin: number | null = null;
 
       const itemRow = (snippet: MenuItem, idx: number, width: number): string => {
         const pointer = idx === cursor ? theme.fg("accent", "> ") : "  ";
         const checkbox = isSkill(snippet) ? theme.fg("accent", "↳")
+          : snippet.id === grabbedId ? theme.fg("accent", "↕")
           : working.has(snippet.id) ? theme.fg("success", "●") : theme.fg("dim", "○");
         const number = !isSkill(snippet) && idx < 9 ? String(idx + 1) : "·";
         const source = snippet.source === "bundled" ? "" : theme.fg("muted", ` [${snippet.source}]`);
@@ -168,7 +178,7 @@ export default function promptSnippets(pi: ExtensionAPI) {
           truncateToWidth(
             theme.fg("dim", safeDisplay(isSkill(snippet)
               ? `${snippet.command} · ${snippet.source} · ${snippet.path}`
-              : `order ${snippet.order} · ${snippet.source} · ${snippet.path}`)),
+              : `${snippet.source} · ${snippet.path}`)),
             width,
           ),
         );
@@ -232,6 +242,33 @@ export default function promptSnippets(pi: ExtensionAPI) {
         done(true);
       };
 
+      /** Restore the grabbed snippet to its position before the move. */
+      const revertMove = () => {
+        if (moveOrigin !== null && cursor !== moveOrigin) {
+          const [moved] = snippetItems.splice(cursor, 1);
+          snippetItems.splice(moveOrigin, 0, moved);
+          cursor = moveOrigin;
+          items = [...snippetItems, ...skills];
+        }
+        grabbedId = null;
+        moveOrigin = null;
+        mode = "reorder";
+      };
+
+      /** Save the full snippet order to the trusted project settings file. */
+      const saveOrder = () => {
+        try {
+          writeProjectOrder(join(ctx.cwd, PROJECT_SETTINGS_PATH), snippetItems.map((s) => s.id), getAgentDir());
+          return true;
+        } catch (error) {
+          ctx.ui.notify(
+            safeDisplay(`Cannot save snippet order: ${error instanceof Error ? error.message : String(error)}`),
+            "error",
+          );
+          return false;
+        }
+      };
+
       return {
         render(width: number): string[] {
           // Reserve lines for: top border, title, blank, blank, hints, bottom border.
@@ -240,17 +277,7 @@ export default function promptSnippets(pi: ExtensionAPI) {
           let content: string[];
           let title: string;
           let hints: string;
-          if (mode === "list") {
-            const rows = buildListRows(width);
-            const cursorRow = rows.findIndex((r) => r.itemIndex === cursor);
-            const v = viewport(rows.map((r) => r.text), listScroll, maxView, cursorRow);
-            content = v.out;
-            listScroll = v.scroll;
-            title = "Prompt snippets";
-            hints = isSkill(items[cursor])
-              ? "↑↓ move • →/Tab preview • Enter insert skill • Esc cancel"
-              : "↑↓ move • →/Tab preview • 1-9/Space toggle • Enter apply • Esc cancel";
-          } else {
+          if (mode === "preview") {
             const snippet = items[cursor];
             const v = viewport(buildPreviewRows(snippet, width), previewScroll, maxView);
             content = v.out;
@@ -259,6 +286,25 @@ export default function promptSnippets(pi: ExtensionAPI) {
             hints = isSkill(snippet)
               ? "↑↓ scroll • ←/Tab/Esc back • Enter insert skill"
               : "↑↓ scroll • ←/Tab/Esc back • Enter apply";
+          } else {
+            const rows = buildListRows(width);
+            const cursorRow = rows.findIndex((r) => r.itemIndex === cursor);
+            const v = viewport(rows.map((r) => r.text), listScroll, maxView, cursorRow);
+            content = v.out;
+            listScroll = v.scroll;
+            if (mode === "reorder") {
+              title = "Prompt snippets — reorder";
+              hints = "↑↓ choose • Enter grab • Esc exit reorder";
+            } else if (mode === "move") {
+              title = `Move: ${safeDisplay(items[cursor].name)}`;
+              hints = "↑↓ move snippet • Enter save • Esc cancel move";
+            } else {
+              const reorderHint = ctx.isProjectTrusted() && !isSkill(items[cursor]) ? " • r reorder" : "";
+              title = "Prompt snippets";
+              hints = isSkill(items[cursor])
+                ? "↑↓ move • →/Tab preview • Enter insert skill • Esc cancel"
+                : `↑↓ move • →/Tab preview • 1-9/Space toggle • Enter apply${reorderHint} • Esc cancel`;
+            }
           }
 
           return [
@@ -274,7 +320,12 @@ export default function promptSnippets(pi: ExtensionAPI) {
         invalidate() {},
         handleInput(data: string) {
           if (mode === "list") {
-            if (matchesKey(data, Key.up)) {
+            if (matchesKey(data, "r")) {
+              if (!ctx.isProjectTrusted() || isSkill(items[cursor])) return;
+              grabbedId = null;
+              moveOrigin = null;
+              mode = "reorder";
+            } else if (matchesKey(data, Key.up)) {
               cursor = cursor === 0 ? items.length - 1 : cursor - 1;
             } else if (matchesKey(data, Key.down)) {
               cursor = cursor === items.length - 1 ? 0 : cursor + 1;
@@ -298,6 +349,53 @@ export default function promptSnippets(pi: ExtensionAPI) {
               if (!snippet) return;
               if (working.has(snippet.id)) working.delete(snippet.id);
               else working.add(snippet.id);
+            }
+            tui.requestRender();
+          } else if (mode === "reorder") {
+            if (matchesKey(data, Key.up)) {
+              cursor = cursor === 0 ? snippetItems.length - 1 : cursor - 1;
+            } else if (matchesKey(data, Key.down)) {
+              cursor = cursor === snippetItems.length - 1 ? 0 : cursor + 1;
+            } else if (matchesKey(data, Key.enter)) {
+              if (cursor >= snippetItems.length) return;
+              grabbedId = snippetItems[cursor].id;
+              moveOrigin = cursor;
+              mode = "move";
+            } else if (matchesKey(data, Key.escape)) {
+              mode = "list";
+            } else {
+              return;
+            }
+            tui.requestRender();
+          } else if (mode === "move") {
+            if (matchesKey(data, Key.up)) {
+              if (cursor > 0) {
+                [snippetItems[cursor - 1], snippetItems[cursor]] = [snippetItems[cursor], snippetItems[cursor - 1]];
+                cursor--;
+                items = [...snippetItems, ...skills];
+              }
+            } else if (matchesKey(data, Key.down)) {
+              if (cursor < snippetItems.length - 1) {
+                [snippetItems[cursor + 1], snippetItems[cursor]] = [snippetItems[cursor], snippetItems[cursor + 1]];
+                cursor++;
+                items = [...snippetItems, ...skills];
+              }
+            } else if (matchesKey(data, Key.enter)) {
+              if (moveOrigin === null || cursor === moveOrigin) {
+                revertMove();
+              } else if (saveOrder()) {
+                grabbedId = null;
+                moveOrigin = null;
+                mode = "reorder";
+              } else {
+                revertMove();
+              }
+              tui.requestRender();
+              return;
+            } else if (matchesKey(data, Key.escape)) {
+              revertMove();
+            } else {
+              return;
             }
             tui.requestRender();
           } else {
@@ -324,6 +422,8 @@ export default function promptSnippets(pi: ExtensionAPI) {
       for (const id of working) shared.enabled.add(id);
       if (editorText !== undefined) ctx.ui.setEditorText(editorText);
     }
+    // Pick up a saved reorder even when the menu was cancelled afterward.
+    refresh(ctx);
     updateWidget(ctx);
   }
 
