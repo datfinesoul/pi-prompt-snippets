@@ -245,7 +245,7 @@ Runtime helpers use `.ts` files without a build step. This avoids stale JavaScri
 
 Set `PI_CODING_AGENT_ENTRY` to the installed Pi `dist/index.js` path to include the installed-Pi integration tests. Without this variable, those tests report a skip. The reload test checks an upgrade from JavaScript helpers and repeated helper edits in one process. It changes temporary copies only.
 
-Each feature branch that triggers CI gets one version update relative to its base. Keep that version unchanged throughout the branch. Record subsequent user-visible changes under the same matching `## [<version>] - <date>` changelog heading. Do not increment the patch version for each edit, fix, or conversation turn. CI requires the branch version to exceed its base version. Pull requests that change only Markdown skipped by CI are exempt. After merge and successful CI, the Release workflow tags the tested commit `v<version>`. Merges that do not change the version are not tagged.
+Each feature branch that triggers CI gets one version update relative to its base. Keep that version unchanged throughout the branch. Record subsequent user-visible changes under the same matching `## [<version>] - <date>` changelog heading. Do not increment the patch version for each edit, fix, or conversation turn. CI requires the branch version to exceed its base version, with exactly one matching versioned changelog heading above it. Pull requests that change only Markdown skipped by CI are exempt. After merge and successful CI, the Release workflow tags the tested commit `v<version>`. Merges that do not change the version are not tagged.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
