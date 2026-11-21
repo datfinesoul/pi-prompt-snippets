@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-21
+
+### Added
+
+- Add an `order` list to the global and trusted project `prompt-snippets.json` layers. The list controls the snippet sequence in the menu and the injected instructions block.
+- Add reorder mode to the snippet selector. Press `r` to enter, Enter to grab, Up or Down to move, Enter to save to `.pi/prompt-snippets.json`, and Esc to cancel a move. Esc in reorder mode returns to selection.
+
+### Changed
+
+- Sort snippets by the configured order list. Unlisted snippets follow by name and then ID. The bundled sequence remains the default order.
+- Save the full current order to the project settings file. Hide reorder mode when the project is not trusted. A failed save warns and reverts the move.
+- Show the snippet source and path in preview. The preview no longer shows an order value.
+
+### Removed
+
+- Remove the `order` frontmatter field from bundled snippets. The extension ignores `order` in custom snippets, so existing files remain valid.
+
 ## [0.4.2] - 2026-11-20
 
 ### Fixed
@@ -77,7 +94,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Protection against applying snippets twice when the extension is loaded more than once.
 - Automated tests and open source project documentation.
 
-[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.4.2...HEAD
 [0.4.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/datfinesoul/pi-prompt-snippets/compare/v0.1.1...v0.2.0

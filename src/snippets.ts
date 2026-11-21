@@ -1,5 +1,16 @@
-import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, relative } from "node:path";
 
 /**
  * @typedef {"bundled" | "global" | "project"} SnippetSource
@@ -7,7 +18,6 @@ import { join } from "node:path";
  *   id: string,
  *   name?: string,
  *   description?: string,
- *   order?: number,
  *   enabled?: boolean,
  *   body?: string,
  * }} SnippetDefinition
@@ -15,18 +25,27 @@ import { join } from "node:path";
  *   id: string,
  *   name: string,
  *   description: string,
- *   order: number,
  *   body: string,
  *   source: SnippetSource,
  *   path: string,
  * }} Snippet
  * @typedef {{ source: SnippetSource, directory: string }} SnippetLayer
- * @typedef {{ shortcut: string | null, showOnDemandSkills: boolean }} Settings
+ * @typedef {{ shortcut: string | null, showOnDemandSkills: boolean, order: readonly string[] }} Settings
  */
 
 export const DEFAULT_SHORTCUT = "ctrl+\\";
-export const DEFAULT_SETTINGS = Object.freeze({ shortcut: DEFAULT_SHORTCUT, showOnDemandSkills: true });
-export const DEFAULT_ORDER = 9999;
+export const DEFAULT_SNIPPET_ORDER = Object.freeze([
+  "ask-questions",
+  "session-kickoff",
+  "pr-title-description",
+  "verify-not-assume",
+  "diagnose-report",
+]);
+export const DEFAULT_SETTINGS = Object.freeze({
+  shortcut: DEFAULT_SHORTCUT,
+  showOnDemandSkills: true,
+  order: DEFAULT_SNIPPET_ORDER,
+});
 export const MAX_SNIPPET_BYTES = 256 * 1024;
 export const MAX_SNIPPETS = 256;
 
@@ -57,7 +76,6 @@ export function parseSnippet(id, raw) {
   const definition = { id };
   if (meta.name) definition.name = meta.name;
   if (meta.description !== undefined) definition.description = meta.description;
-  if (meta.order !== undefined && /^-?\d+$/.test(meta.order)) definition.order = Number.parseInt(meta.order, 10);
   if (meta.enabled === "false") definition.enabled = false;
   else if (meta.enabled === "true") definition.enabled = true;
   if (body) definition.body = body;
@@ -106,9 +124,10 @@ export function readLayer(directory) {
  * when its own body is empty, and removes the snippet with `enabled: false`.
  *
  * @param {{ source: SnippetSource, definitions: (SnippetDefinition & { path: string })[] }[]} layers
- * @returns {Snippet[]} Snippets sorted by order, name, and ID.
+ * @param {readonly string[]} [order]
+ * @returns {Snippet[]} Snippets sorted by the configured order, then name and ID.
  */
-export function mergeLayers(layers) {
+export function mergeLayers(layers, order = DEFAULT_SNIPPET_ORDER) {
   /** @type {Map<string, Partial<Snippet> & { id: string }>} */
   const merged = new Map();
 
@@ -132,26 +151,48 @@ export function mergeLayers(layers) {
       id: entry.id,
       name: entry.name ?? entry.id,
       description: entry.description ?? "",
-      order: entry.order ?? DEFAULT_ORDER,
       body: entry.body,
       source: /** @type {SnippetSource} */ (entry.source),
       path: /** @type {string} */ (entry.path),
     });
   }
 
-  const byOrder = (/** @type {Snippet} */ a, /** @type {Snippet} */ b) =>
-    a.order - b.order || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
-  return snippets.sort(byOrder);
+  return sortSnippets(snippets, order);
+}
+
+/**
+ * Sort snippets by the configured ID list. Listed IDs keep the list order.
+ * Unlisted snippets follow, sorted by name and then ID.
+ *
+ * @param {Snippet[]} snippets
+ * @param {readonly string[]} order
+ * @returns {Snippet[]}
+ */
+export function sortSnippets(snippets, order) {
+  /** @type {Map<string, number>} */
+  const positions = new Map();
+  for (const id of order) {
+    if (!positions.has(id)) positions.set(id, positions.size);
+  }
+  return snippets.sort((a, b) => {
+    const aPosition = positions.get(a.id);
+    const bPosition = positions.get(b.id);
+    if (aPosition !== undefined && bPosition !== undefined) return aPosition - bPosition;
+    if (aPosition !== undefined) return -1;
+    if (bPosition !== undefined) return 1;
+    return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+  });
 }
 
 /**
  * Load and merge snippets from the given layers in precedence order.
  *
  * @param {SnippetLayer[]} layers
+ * @param {readonly string[]} [order]
  * @returns {Snippet[]}
  */
-export function loadSnippets(layers) {
-  return mergeLayers(layers.map(({ source, directory }) => ({ source, definitions: readLayer(directory) })));
+export function loadSnippets(layers, order = DEFAULT_SNIPPET_ORDER) {
+  return mergeLayers(layers.map(({ source, directory }) => ({ source, definitions: readLayer(directory) })), order);
 }
 
 /**
@@ -182,7 +223,7 @@ export function applySnippets(text, active) {
  *
  * @param {string} contents
  * @param {string} source
- * @param {{ defaults?: Settings, project?: boolean }} [options]
+ * @param {{ defaults?: Partial<Settings>, project?: boolean }} [options]
  * @returns {Settings}
  */
 export function parseSettings(contents, source, { defaults = DEFAULT_SETTINGS, project = false } = {}) {
@@ -197,7 +238,7 @@ export function parseSettings(contents, source, { defaults = DEFAULT_SETTINGS, p
     throw new Error(`${source}: settings must be an object`);
   }
 
-  const settings = { ...defaults };
+  const settings = withDefaults(defaults);
   // Shortcuts register before project trust is available, so ignore project values.
   if (!project && config.shortcut !== undefined) {
     if (config.shortcut === null || config.shortcut === false || config.shortcut === "") {
@@ -214,14 +255,50 @@ export function parseSettings(contents, source, { defaults = DEFAULT_SETTINGS, p
     }
     settings.showOnDemandSkills = config.showOnDemandSkills;
   }
+  if (config.order !== undefined) {
+    if (!Array.isArray(config.order)) {
+      throw new Error(`${source}: "order" must be an array of snippet IDs`);
+    }
+    /** @type {string[]} */
+    const order = [];
+    const seen = new Set();
+    for (const id of config.order) {
+      if (typeof id !== "string" || id.trim() === "") {
+        throw new Error(`${source}: "order" must be an array of snippet IDs`);
+      }
+      const value = id.trim();
+      if (!seen.has(value)) {
+        seen.add(value);
+        order.push(value);
+      }
+    }
+    // An empty list inherits the lower layer; omit the field to do the same.
+    if (order.length > 0) settings.order = order;
+  }
   return settings;
+}
+
+/**
+ * Fill missing settings fields without sharing the default order array.
+ *
+ * @param {Partial<Settings>} defaults
+ * @returns {Settings}
+ */
+function withDefaults(defaults) {
+  return {
+    shortcut: defaults.shortcut !== undefined ? defaults.shortcut : DEFAULT_SETTINGS.shortcut,
+    showOnDemandSkills: defaults.showOnDemandSkills !== undefined
+      ? defaults.showOnDemandSkills
+      : DEFAULT_SETTINGS.showOnDemandSkills,
+    order: [...(defaults.order ?? DEFAULT_SETTINGS.order)],
+  };
 }
 
 /**
  * Read one settings layer. Invalid layers warn and preserve inherited settings.
  *
  * @param {string} settingsPath
- * @param {{ defaults?: Settings, project?: boolean, onWarning?: (message: string) => void }} [options]
+ * @param {{ defaults?: Partial<Settings>, project?: boolean, onWarning?: (message: string) => void }} [options]
  * @returns {Settings}
  */
 export function readSettings(settingsPath, { defaults = DEFAULT_SETTINGS, project = false, onWarning = console.warn } = {}) {
@@ -231,6 +308,55 @@ export function readSettings(settingsPath, { defaults = DEFAULT_SETTINGS, projec
     if (error.code !== "ENOENT") {
       onWarning(`Prompt snippets settings: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return { ...defaults };
+    return withDefaults(defaults);
+  }
+}
+
+/**
+ * Save one complete snippet order to a project settings file. Preserve other
+ * fields, refuse invalid files, and use an atomic replacement.
+ *
+ * @param {string} settingsPath
+ * @param {readonly string[]} order
+ * @param {string} agentDir
+ */
+export function writeProjectOrder(settingsPath, order, agentDir) {
+  const directory = dirname(settingsPath);
+  mkdirSync(directory, { recursive: true });
+  if (!lstatSync(directory).isDirectory()) {
+    throw new Error("Project .pi must be a regular directory.");
+  }
+
+  // Reordering must not write the global settings file by accident.
+  try {
+    if (relative(realpathSync(agentDir), realpathSync(directory)) === "") {
+      throw new Error("Project and global settings directories are the same.");
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  /** @type {Record<string, unknown>} */
+  let config = {};
+  try {
+    if (!lstatSync(settingsPath).isFile()) {
+      throw new Error("Project settings must be a regular file.");
+    }
+    const parsed = JSON.parse(readFileSync(settingsPath, "utf8"));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Project settings must be a JSON object.");
+    }
+    config = parsed;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  const temporaryDirectory = mkdtempSync(join(directory, ".prompt-snippets-"));
+  try {
+    const draft = join(temporaryDirectory, "prompt-snippets.json");
+    writeFileSync(draft, `${JSON.stringify({ ...config, order: [...order] }, null, 2)}\n`, { mode: 0o600 });
+    renameSync(draft, settingsPath);
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 }

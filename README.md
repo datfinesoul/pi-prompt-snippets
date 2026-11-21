@@ -63,9 +63,10 @@ pi --no-extensions --extension ./extensions/prompt-snippets/index.ts
 - Press <kbd>Up</kbd> at the first item to move to the last item, including skills when shown. Press <kbd>Down</kbd> at the last item to return to the first.
 - Press <kbd>Enter</kbd> to apply the checked snippets, or the highlighted snippet if none are checked. This selects snippets for your next message; it does not copy to the clipboard. Press <kbd>Esc</kbd> to cancel without changing your active snippets.
 - Press <kbd>Right</kbd> or <kbd>Tab</kbd> to preview the highlighted snippet, including the layer and file it came from. Use <kbd>Up</kbd>/<kbd>Down</kbd> to scroll, <kbd>Left</kbd>, <kbd>Tab</kbd>, or <kbd>Esc</kbd> to return to the list, and <kbd>Enter</kbd> to apply.
+- Press <kbd>r</kbd> to enter reorder mode. Use <kbd>Up</kbd>/<kbd>Down</kbd> to choose a snippet, then <kbd>Enter</kbd> to grab it. Use <kbd>Up</kbd>/<kbd>Down</kbd> to move it. Press <kbd>Enter</kbd> to save the order to `.pi/prompt-snippets.json`, or <kbd>Esc</kbd> to cancel the move. Press <kbd>Esc</kbd> in reorder mode to return to selection. Reorder mode requires project trust. The menu hides the reorder option when the project is not trusted.
 - Active snippets appear in a widget above the editor. Snippets from the global or project layer are tagged in the menu.
 - On send, Pi puts your request first and the selected snippets in one instructions block after it. XML-style tags separate the sections.
-- Snippets appear in one list, sorted by `order`, then name, then ID. The widget shows the selected instructions.
+- Snippets appear in one list. The `order` setting controls the sequence. Unlisted snippets follow by name, then ID. The widget shows the selected instructions in this order.
 - Selections reset after each sent message and at session start. The injected text remains in conversation history while Pi retains that history.
 
 ### On-demand skills
@@ -111,18 +112,17 @@ Create `~/.pi/agent/prompt-snippets/concise.md`, or `.pi/prompt-snippets/concise
 ---
 name: Concise
 description: Keep answers short and to the point
-order: 10
 ---
 Keep your response concise. Skip preamble and unnecessary explanation.
 ```
 
 ### Change a bundled snippet
 
-Override only the fields you want to change. This example moves the bundled `diagnose-report` snippet earlier in the list and keeps its text:
+Override only the fields you want to change. This example renames the bundled `diagnose-report` snippet and keeps its text:
 
 ```markdown
 ---
-order: 5
+name: Diagnose only
 ---
 ```
 
@@ -142,10 +142,9 @@ enabled: false
 |---|---|---|
 | `name` | No | Display name; defaults to the ID |
 | `description` | No | Shown next to the name in the toggle menu |
-| `order` | No | Integer sort order; defaults to `9999`, with ties broken by name, then ID |
 | `enabled` | No | Set to `false` to remove the snippet from lower layers |
 
-The extension ignores legacy `placement` fields in custom snippets. These snippets still load, but all selected snippets enter the appended instructions block.
+The extension ignores legacy `placement` and `order` fields in custom snippets. These snippets still load. Use the `order` list in [menu settings](#menu-settings) to set their position.
 
 Frontmatter is optional; a file without it is used entirely as the body. Invalid field values are ignored rather than hiding the snippet. A new snippet without a body is skipped.
 
@@ -157,11 +156,11 @@ Menu settings use these layers, from lowest to highest precedence:
 
 | Layer | Location | Notes |
 |---|---|---|
-| Default | Built into the extension | `showOnDemandSkills: true` |
+| Default | Built into the extension | `showOnDemandSkills: true` and the bundled snippet order |
 | Global | `~/.pi/agent/prompt-snippets.json` | Applies to every project and follows `PI_CODING_AGENT_DIR` |
 | Project | `<project>/.pi/prompt-snippets.json` | Overrides global menu settings only after Pi grants project trust |
 
-An omitted field inherits its lower-layer value. A trusted project can enable the skills section even when global settings disable it. Installation scope does not change these layers.
+An omitted field inherits its lower-layer value. A trusted project can set its own snippet order and enable the skills section even when global settings disable it. Installation scope does not change these layers.
 
 ### Hide on-demand skills
 
@@ -175,16 +174,37 @@ Add this setting to `.pi/prompt-snippets.json` for one trusted project, or to th
 
 When disabled, the menu skips skill discovery and skill file reads. Snippet selection and typed `/skill:name` commands still work. Set the value to `true` to restore the section.
 
-The menu reads these settings each time it opens, so visibility changes do not need `/reload`. Invalid or unreadable settings files produce warnings and leave the lower-layer settings unchanged. Missing files simply inherit their lower-layer settings.
+The extension reads these settings when the menu opens. It also reads the order before it sends a message with selected snippets. Changes to order and visibility do not need `/reload`. Invalid or unreadable settings files produce warnings and leave the lower-layer settings unchanged. Missing files simply inherit their lower-layer settings.
+
+### Change snippet order
+
+Add an `order` list to `.pi/prompt-snippets.json` for one trusted project, or to the global settings file for every project:
+
+```json
+{
+  "order": [
+    "diagnose-report",
+    "ask-questions",
+    "session-kickoff"
+  ]
+}
+```
+
+Listed IDs appear first in the given sequence. Unlisted IDs follow, sorted by name and then ID. The highest layer that defines a non-empty list wins. An omitted or empty list inherits the lower layer. Unknown IDs are ignored.
+
+The built-in order is `ask-questions`, `session-kickoff`, `pr-title-description`, `verify-not-assume`, then `diagnose-report`.
+
+Reorder mode writes the full current order to the project settings file. It keeps other project settings.
 
 ### Settings reference
 
 | Field | Default | Scope | When changes apply |
 |---|---|---|---|
+| `order` | Bundled snippet order | Global and trusted project | Next menu opening or message send |
 | `showOnDemandSkills` | `true` | Global and trusted project | Next menu opening |
 | `shortcut` | `ctrl+\\` | Global only | After `/reload` |
 
-`showOnDemandSkills` accepts only JSON booleans. A project `shortcut` value is ignored. The global file can contain both fields.
+`order` accepts an array of snippet IDs. It ignores unknown IDs and removes duplicate IDs. Other invalid values produce a warning and keep the lower-layer order. `showOnDemandSkills` accepts only JSON booleans. A project `shortcut` value is ignored. The global file can contain all three fields.
 
 ## Keyboard shortcut
 
@@ -200,7 +220,7 @@ Choose a different shortcut, or disable it, in `~/.pi/agent/prompt-snippets.json
 
 Use `null` or `false` to disable the shortcut and use only `/snippets`. Keys use Pi's [key syntax](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/keybindings.md#key-syntax). Shortcuts with <kbd>Shift</kbd> on a <kbd>Ctrl</kbd> letter or with <kbd>Super</kbd> require a terminal with extended keyboard support, such as Kitty, Ghostty, WezTerm, or iTerm2. Run `/reload` after changing the shortcut.
 
-**Configuration scope:** Snippet files and menu visibility support project overrides. The `shortcut` setting is global-only because the extension registers it during loading, before project trust is available. Configure it in `~/.pi/agent/prompt-snippets.json`, which follows `PI_CODING_AGENT_DIR`. A project `.pi/prompt-snippets.json` cannot override the shortcut. Its menu settings apply only after project trust is available.
+**Configuration scope:** Snippet files, menu visibility, and snippet order support project overrides. The `shortcut` setting is global-only because the extension registers it during loading, before project trust is available. Configure it in `~/.pi/agent/prompt-snippets.json`, which follows `PI_CODING_AGENT_DIR`. A project `.pi/prompt-snippets.json` cannot override the shortcut. Its menu settings apply only after project trust is available. Reorder mode therefore requires project trust and is hidden without it.
 
 ## How it works
 
